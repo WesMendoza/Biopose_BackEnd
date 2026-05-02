@@ -1,3 +1,28 @@
+TABLE empresa {
+  idEmpresa int [primary key]
+  CodigoEmpresa varchar
+  nombreEmpresa varchar
+  direccion varchar
+  Ruc varchar
+  estado char
+  usuarioCreacion varchar
+  fechaCreacion datetime
+  usuarioModificacion varchar
+  fechaModificacion datetime
+}
+
+TABLE empresaUsuarioRol {
+  idEmpresaUsuarioRol int [primary key]
+  idEmpresa int [ref: > empresa.idEmpresa]
+  idUsuario int [ref: > users.idUsuario]
+  idRol int [ref: > rol.idRol]
+  estado char
+  usuarioCreacion varchar
+  fechaCreacion datetime
+  usuarioModificacion varchar
+  fechaModificacion datetime
+}
+
 TABLE users {
   idUsuario int [primary key]
   nombre varchar
@@ -23,17 +48,6 @@ TABLE rol {
   fechaModificacion varchar
 }
 
-TABLE usersRol {
-  idUsersRol int [primary key]
-  idUsuario int [ref: >users.idUsuario]
-  idRol int [ref: > rol.idRol]
-  estado char
-  usuarioCreacion varchar
-  fechaCreacion datetime
-  usuarioModificacion varchar
-  fechaModificacion varchar
-}
-
 TABLE menuoption {
   idOption int [primary key]
   nombreoption varchar
@@ -52,6 +66,7 @@ TABLE rolOption {
 
 TABLE  parametrosCabecera {
   idParametrosCabecera int [primary key]
+  idEmpresa int [ref: > empresa.idEmpresa]
   nombreParametro varchar
   codigoParmetro varchar
   estado char
