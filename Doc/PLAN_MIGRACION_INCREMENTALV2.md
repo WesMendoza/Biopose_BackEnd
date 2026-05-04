@@ -59,20 +59,33 @@ La migración NO será de una sola vez, sino en **fases independientes y validab
 **Objetivo**: Definir entidades de BD para almacenar análisis, detecciones y eventos.
 
 **Tareas**:
-1. Crear modelos para:
+1. Crear modelos Django en `backend/apps/analysis/models.py` para:
    - `VideoUpload` - Información del video subido
    - `DetectionEvent` - Evento de comportamiento detectado (pelea, disturbio, etc.)
    - `PersonKeypoints` - Puntos clave detectados de una persona
    - `AnalysisReport` - Reporte consolidado de un análisis
-2. Migrar los triggers/procedimientos de BD necesarios del `CreateDb.sql`
-3. Crear índices para consultas frecuentes
+2. Crear script SQL versionado en `scripts/db/update/` (e.g., `001_fase2_analysis_tables.sql`) con:
+   - DDL de tablas analysis_* con campos de auditoría e idEmpresa
+   - Índices para consultas frecuentes
+   - Triggers para auditoría (e.g., actualizar timestamps)
+3. **VALIDACIÓN MANUAL**: Revisar script SQL antes de ejecutar
+4. **EJECUCIÓN MANUAL**: Ejecutar script en PostgreSQL (psql o herramienta BD) en entorno Dev
+5. **ACTUALIZAR SCHEMA**: Modificar `scripts/db/create/Esquema BD.sql` para reflejar nuevas tablas
+6. Documentar en `FASE_2_COMPLETADA.md` qué se ejecutó y resultado
 
-**Archivos a modificar**:
-- `backend/apps/analysis/models.py`
+**Archivos a crear/modificar**:
+- `backend/apps/analysis/models.py` (modelos con `managed=False`)
+- `backend/scripts/db/update/001_fase2_analysis_tables.sql` (DDL)
+- `backend/scripts/db/create/Esquema BD.sql` (actualizar schema after script execution)
+- `Doc/FASE_2_COMPLETADA.md` (nuevo, registrar ejecución manual)
 
 **Criterio de éxito**:
-- `python manage.py migrate` ejecuta sin errores
-- Se pueden crear registros de análisis en la BD
+- Modelos Django definidos sin errores (`python manage.py check` pasa)
+- Script SQL versionado, validado y documentado
+- Script ejecutado manualmente en BD Dev
+- Tablas creadas y visibles en PostgreSQL
+- Esquema BD.sql actualizado reflejando nuevas tablas
+- Se pueden crear registros de análisis en Django shell
 
 ---
 
@@ -220,6 +233,14 @@ backend/
 ### 4. Crear archivo de configuración
 - `backend/services/config_loader.py` para parámetros del sistema (thresholds, window_size, etc.)
 
+### 5. Proceso de Cambios BD (IMPORTANTE)
+**Control Manual**: Todo cambio de BD debe ser versionado, validado y ejecutado manualmente:
+  1. Crear script SQL en `scripts/db/update/` (e.g., `001_fase2_analysis_tables.sql`)
+  2. Validar sintaxis y dependencias manualmente
+  3. Ejecutar script manualmente en PostgreSQL (psql/herramienta BD)
+  4. **ACTUALIZAR** `scripts/db/create/Esquema BD.sql` con el nuevo estado del schema
+  5. Registrar cambio en archivo de control de fase (FASE_X_COMPLETADA.md)
+
 ## Dependencias por Fase
 
 ```
@@ -242,11 +263,16 @@ Fase 1 (Servicios) → Fase 2 (Modelos) → Fase 3 (API)
 | Pérdida de rendimiento | Benchmarking antes/después, usar caché |
 | Incompatibilidad BD | Mantener CreateDb.sql como referencia, usar managed=False |
 | Saltos de usuario a nuevo sistema | Mantener Flask operativo durante transición |
+| Errores en cambios BD sin validación previa | **Control Manual Obligatorio**: revisar script antes de ejecutar, documentar en Esquema BD.sql |
+| Pérdida de trazabilidad de cambios BD | Registrar ejecución en FASE_X_COMPLETADA.md: fecha, script, resultado, cambios al schema |
 
 ## Checklist de Validación
 
 - [ ] Sistema Flask original funciona sin cambios
 - [ ] Servicios IA pueden importarse e usarse sin Flask
+- [ ] Script SQL de Fase 2 creado y validado manualmente
+- [ ] Script SQL de Fase 2 ejecutado manualmente en BD Dev
+- [ ] Esquema BD.sql actualizado reflejando nuevas tablas de Fase 2
 - [ ] Modelos Django migran sin errores
 - [ ] Primeros endpoints REST responden correctamente
 - [ ] Celery procesa tareas en background
@@ -254,6 +280,7 @@ Fase 1 (Servicios) → Fase 2 (Modelos) → Fase 3 (API)
 - [ ] Autenticación redirige correctamente
 - [ ] Frontend consume nueva API
 - [ ] Permisos y roles funcionan en nueva API
+- [ ] Registros de ejecución documentados en FASE_X_COMPLETADA.md
 
 ## Timeline Estimado
 

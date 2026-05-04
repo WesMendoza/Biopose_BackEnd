@@ -76,7 +76,6 @@ TABLE  parametrosCabecera {
   fechaModificacion varchar
 }
 
-
 TABLE parametroDetalle {
   idParametroDetalle int [primary key]
   codigoParametro varchar [ref: > parametrosCabecera.codigoParmetro]
@@ -88,4 +87,66 @@ TABLE parametroDetalle {
   fechaCreacion datetime
   usuarioModificacion varchar
   fechaModificacion varchar
+}
+
+TABLE analysis_videoupload {
+  idVideoUpload int [primary key]
+  idUsuario int [ref: > users.idUsuario]
+  nombreOriginal varchar
+  rutaArchivo varchar
+  tamanioBytes bigint
+  duracionSegundos float
+  fps float
+  estado varchar
+  celeryTaskId varchar
+  fechaCarga datetime
+  fechaProcesamiento datetime
+}
+
+TABLE analysis_detectionevent {
+  idDetectionEvent int [primary key]
+  idVideoUpload int [ref: > analysis_videoupload.idVideoUpload]
+  tipoEvento varchar
+  confianza float
+  frameInicio int
+  frameFin int
+  tiempoInicio float
+  tiempoFin float
+  personasInvolucradas int
+  detalles json
+  fechaCreacion datetime
+}
+
+TABLE analysis_personkeypoints {
+  idPersonKeypoints int [primary key]
+  idDetectionEvent int [ref: > analysis_detectionevent.idDetectionEvent]
+  personId int
+  frameNumber int
+  keypointsJson json
+  fechaCreacion datetime
+}
+
+TABLE analysis_report {
+  idAnalysisReport int [primary key]
+  idVideoUpload int [unique, ref: > analysis_videoupload.idVideoUpload]
+  totalFrames int
+  totalDuracionSegundos float
+  totalEventos int
+  totalPeleas int
+  totalDisturbios int
+  confianzaPromedio float
+  confianzaMaxima float
+  tiempoProcesamientoSegundos float
+  estadisticas json
+  resumenJson json
+  generadoEn datetime
+  actualizadoEn datetime
+}
+
+TABLE systemParameter {
+  idParameter int [primary key]
+  codigo varchar [unique]
+  valor varchar
+  descripcion varchar
+  tipo varchar
 }

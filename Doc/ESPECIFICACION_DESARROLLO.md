@@ -72,8 +72,14 @@ Reglas para estos scripts:
 
 - Cada script debe tener un nombre secuencial y descriptivo.
 - Debe quedar claro si crea, modifica o corrige estructura.
-- No se deben ejecutar scripts sin registro previo en la carpeta de versionamiento.
-- Debe existir trazabilidad de que script se ejecuto y en que orden.
+- **CONTROL MANUAL (NO AUTOMATICO)**: No se deben ejecutar scripts sin validacion previa y ejecucion manual explícita.
+- Flujo de cambios en BD:
+  1. Diseñar cambio y crear script SQL en `scripts/db/update/` con nombre secuencial (e.g., `002_fase3_endpoints_tables.sql`).
+  2. **Validar**: Revisar el script manualmente en entorno dev/test, comprobar sintaxis y dependencias.
+  3. **Documentar**: Actualizar `scripts/db/create/Esquema BD.sql` reflejando el nuevo estado del schema (tabla, columnas, FK, índices).
+  4. **Ejecutar**: Correr el script en PostgreSQL (esquema Dev) de forma manual en el cliente psql o herramienta de BD.
+  5. **Registrar**: Documentar en el archivo de control (FASE_X_COMPLETADA.md) qué script se ejecutó, cuándo y resultado.
+- Debe existir trazabilidad de que script se ejecuto, en que orden, fecha y resultado en la documentacion de fase correspondiente.
 
 ## Manejo de .gitignore
 
