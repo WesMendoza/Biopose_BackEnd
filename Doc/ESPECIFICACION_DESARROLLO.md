@@ -114,6 +114,46 @@ Se recomienda separar al menos estas categorias:
 - Imagenes de ejemplo.
 - Archivos descargables o de reporte.
 
+**Cambio en Fase 3**: Se introduce carpeta `backend/media/` centralizada para todos los uploads y archivos generados.
+
+### Estructura Recomendada (Fase 3+)
+
+```
+backend/media/
+├── images/
+│   ├── uploads/              # Imágenes subidas sin procesar
+│   │   └── image_20260503_143045.jpg
+│   └── processed/            # Imágenes con YOLO + keypoints
+│       └── image_keypoints_20260503_143045.jpg
+├── videos/
+│   ├── uploads/              # Videos sin procesar (desde POST /upload/)
+│   │   └── video_20260503_143045.mp4
+│   ├── processing/           # Videos siendo procesados con LSTM
+│   │   └── video_processing_20260503_143045.mp4
+│   └── results/              # Videos procesados + detectados
+│       └── video_processed_20260503_143045.mp4
+└── reports/                  # Reportes generados
+    └── analysis_report_20260503.json
+```
+
+**Ventajas**:
+- Centralización: Antes estaban en `Tesis/src/static/videos/`, ahora en un lugar único
+- Claridad: Estados de procesamiento explícitos (uploads, processing, results)
+- Escalabilidad: Fácil de migrar a almacenamiento externo (S3, Google Cloud Storage)
+- Seguridad: Separado del código fuente, no se versionan en git
+
+**Configuración en Django (core/settings.py)**:
+```python
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+```
+
+**En urls.py (desarrollo)**:
+```python
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+```
+
 En particular, los videos de entrenamiento deben mantenerse fuera de la carpeta de ejecucion principal si no son necesarios en produccion.
 
 La recomendacion es almacenarlos en un espacio separado, por ejemplo:

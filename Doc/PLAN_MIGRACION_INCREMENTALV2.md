@@ -34,6 +34,8 @@ La migración NO será de una sola vez, sino en **fases independientes y validab
 
 **Objetivo**: Crear una capa de servicios que encapsule la lógica de detección sin depender de Flask.
 
+**Estado**: ✅ Completada
+
 **Tareas**:
 1. Crear módulo `services/pose_detection.py` que importe `PoseModule.py` del Tesis
 2. Crear módulo `services/behavior_detection.py` que importe `BehaviorDetector.py`
@@ -52,11 +54,15 @@ La migración NO será de una sola vez, sino en **fases independientes y validab
 - Los servicios pueden ejecutarse sin dependencias de Flask
 - Se puede importar e instanciar `PoseModule` y ejecutar inferencia en una imagen/video
 
+**Cierre de fase**: ver [backend/FASE_1_COMPLETADA.md](../backend/FASE_1_COMPLETADA.md)
+
 ---
 
 ### **Fase 2: Crear Modelos Django para Análisis (Semana 1-2)**
 
 **Objetivo**: Definir entidades de BD para almacenar análisis, detecciones y eventos.
+
+**Estado**: ✅ Completada
 
 **Tareas**:
 1. Crear modelos Django en `backend/apps/analysis/models.py` para:
@@ -87,30 +93,119 @@ La migración NO será de una sola vez, sino en **fases independientes y validab
 - Esquema BD.sql actualizado reflejando nuevas tablas
 - Se pueden crear registros de análisis en Django shell
 
+**Cierre de fase**: ver [backend/FASE_2_COMPLETADA.md](../backend/FASE_2_COMPLETADA.md)
+
 ---
 
 ### **Fase 3: Endpoints REST Básicos (Semana 2)**
 
-**Objetivo**: Exponer servicios de detección a través de API REST.
+**Objetivo**: Exponer servicios de detección a través de API REST y cubrir los flujos legacy de carga/procesamiento de imágenes y videos.
 
-**Tareas**:
-1. Crear serializadores para:
-   - Subida de video (`VideoUploadSerializer`)
-   - Resultado de análisis (`DetectionEventSerializer`)
-2. Crear vistas (ViewSets) para:
-   - `/api/analysis/upload-video/` - POST para subir video
-   - `/api/analysis/detect-pose/` - POST para detectar pose en imagen
-   - `/api/analysis/results/{video_id}/` - GET para obtener resultados
-3. Implementar cola básica (archivo) para procesar videos (antes de Celery)
+**Estado**: ⏳ Análisis Completado - Implementación en Progreso
 
-**Archivos a crear**:
-- `backend/apps/analysis/serializers.py`
-- `backend/apps/analysis/views.py`
-- `backend/apps/analysis/urls.py`
+**Análisis Realizado**:
+1. ✅ Identificadas 37 endpoints Flask legacy con métodos, parámetros y respuestas exactas
+2. ✅ Especificación detallada de endpoints Django REST en [FASE_3_ESPECIFICACION.md](FASE_3_ESPECIFICACION.md)
+3. ✅ Comparativa legacy vs Django en [FASE_3_COMPARATIVA_LEGACY_VS_DJANGO.md](FASE_3_COMPARATIVA_LEGACY_VS_DJANGO.md)
+4. ✅ Guía práctica con templates de código en [FASE_3_QUICK_START.md](FASE_3_QUICK_START.md)
 
-**Criterio de éxito**:
-- Puedo subir un video desde Postman/cURL a `/api/analysis/upload-video/`
-- El backend detecta pose y devuelve JSON con coordenadas de keypoints
+**Tareas Pendientes - Implementación**:
+
+**Iteración 1: Estructura Base**
+1. Crear `backend/apps/analysis/serializers.py` con 8+ serializers:
+   - `KeypointSerializer` - Punto clave (17 COCO)
+   - `ImageUploadSerializer` - Recibir imagen
+   - `ImageProcessingResponseSerializer` - Respuesta de YOLO
+   - `VideoUploadSerializer` - Metadatos video
+   - `VideoProcessingRequestSerializer` - Parámetros de procesamiento
+   - `DetectionEventSerializer` - Evento detectado
+   - `AnalysisReportSerializer` - Reporte consolidado
+   - `GenerateFramesRequestSerializer` - Solicitar extracción de frames
+
+2. Crear `backend/apps/analysis/views.py` con ViewSets:
+   - `ImageAnalysisViewSet` - Imágenes (upload, resize, save)
+   - `VideoAnalysisViewSet` - Videos (upload, process, stream, results, download)
+   - `FrameGenerationViewSet` - Frames (generate-from-video)
+
+3. Actualizar `backend/apps/analysis/urls.py` con routers para ViewSets
+
+4. Actualizar `backend/core/urls.py`:
+   ```python
+   path('api/analysis/', include('apps.analysis.urls')),
+   ```
+
+**Iteración 2: Integración IA**
+1. Implementar `detect_pose_yolo()` que retorne 17 keypoints COCO
+2. Implementar `detect_behavior_lstm()` que retorne DetectionEvents
+3. Crear wrapper para BehaviorDetector3D
+4. Integrar en views mediante servicios IA
+
+**Iteración 3: Streaming y Persistencia**
+1. Implementar SSE (Server-Sent Events) para `/stream/`
+2. Persistir resultados en BD (VideoUpload, DetectionEvent, PersonKeypoints)
+3. Crear AnalysisReport automáticamente
+
+**Endpoints Fase 3 (9 consolidados de 37 legacy)**:
+
+**Grupo 1: Análisis de Imágenes**
+- `POST /api/analysis/images/upload/` - Procesa con YOLO, retorna 17 keypoints
+- `POST /api/analysis/images/resize/` - Redimensiona imagen
+- `POST /api/analysis/images/save/` - Guarda imagen + keypoints
+
+**Grupo 2: Análisis de Videos**
+- `POST /api/analysis/videos/upload/` - Subir video
+- `POST /api/analysis/videos/{id}/process/` - Inicia LSTM (retorna 202)
+- `GET /api/analysis/videos/{id}/stream/` - SSE: progreso + eventos
+- `GET /api/analysis/videos/{id}/results/` - Detecciones consolidadas
+- `GET /api/analysis/videos/{id}/download/` - Descargar video procesado
+
+**Grupo 3: Generación de Frames**
+- `POST /api/analysis/frames/generate-from-video/` - Extrae frames por FPS
+
+**Mejoras Arquitectónicas**:
+- ✅ RESTful semantics (GET para lectura, POST para crear)
+- ✅ IDs integer en lugar de filenames
+- ✅ HTTP 202 para procesamiento asíncrono explícito
+- ✅ SSE estándar para streaming
+- ✅ Consolidación de endpoints: -60% complejidad
+- ✅ JSON responses uniforme
+
+**Estructura de Almacenamiento**:
+```
+backend/media/
+├── images/
+│   ├── uploads/       # Imágenes subidas sin procesar
+│   └── processed/     # Imágenes con YOLO + keypoints
+└── videos/
+    ├── uploads/       # Videos sin procesar
+    ├── processing/    # Videos en procesamiento LSTM
+    └── results/       # Videos procesados + detectados
+```
+
+**Modelos IA Integrados**:
+- **YOLO v8s-pose**: 17 keypoints COCO format
+  - Input: Imagen JPG/PNG
+  - Output: Posición (horizontal/vertical/cuadrada), 17 keypoints con (x, y, z, confidence)
+- **LSTM 3-clases**: DISTURBIO, NEUTRAL, PELEAR
+  - WINDOW_SIZE: 32 frames
+  - Thresholds: TH_PELEAR=0.75, TH_DISTURBIO=0.92
+  - Output: DetectionEvent con tipo, confianza, frames, timestamps
+- **BehaviorDetector3D**: Versión 3D (opcional en query param dimension=3D)
+
+**Criterio de Éxito**:
+- ✅ POST imagen JPG → respuesta JSON con 17 keypoints COCO + posición
+- ✅ POST video MP4 → crea VideoUpload, retorna ID
+- ✅ POST procesar → HTTP 202, inicia LSTM
+- ✅ GET stream → eventos SSE de progreso + detecciones + frames base64
+- ✅ GET results → array DetectionEvent consolidados
+- ✅ Estructura JSON uniforme en todas respuestas
+- ✅ Validación parámetros (400), recurso no existe (404), error servidor (500)
+- ✅ Persistencia en BD: VideoUpload, DetectionEvent, PersonKeypoints, AnalysisReport
+
+**Nota Importante**:
+- Legacy NO tiene endpoint de entrenamiento; solo INFERENCIA
+- Modelos pre-entrenados: YOLO y LSTM cargados desde `backend/resources/models/`
+- Fase 3 cubre: carga, procesamiento, inferencia, persistencia (NO reentrenamiento)
 
 ---
 
@@ -240,6 +335,8 @@ backend/
   3. Ejecutar script manualmente en PostgreSQL (psql/herramienta BD)
   4. **ACTUALIZAR** `scripts/db/create/Esquema BD.sql` con el nuevo estado del schema
   5. Registrar cambio en archivo de control de fase (FASE_X_COMPLETADA.md)
+
+Este flujo aplica para cualquier fase futura que modifique tablas, índices, triggers o datos base.
 
 ## Dependencias por Fase
 
