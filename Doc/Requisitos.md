@@ -1,4 +1,5 @@
 Comandos  a ejecutar en orden
+## Requisitos para levantamiento de Sistema Anterior 
 
 (Nivel Raiz del proyecto)
 1. python -m venv .venv
