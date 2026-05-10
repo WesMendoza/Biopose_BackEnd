@@ -325,7 +325,7 @@ Biopose_BackEnd/
 │   ├── css/
 │   └── assets/
 ├── Doc/
-│   ├── PLAN_MIGRACION_INCREMENTALV2.md    # Plan detallado (todas las fases)
+│   ├── PLAN_MIGRACION.md    # Plan detallado (todas las fases)
 │   ├── FASE_3_ESPECIFICACION.md             # Especificación endpoints Fase 3
 │   ├── FASE_3_COMPARATIVA_LEGACY_VS_DJANGO.md # Mapeo Flask → Django
 │   ├── FASE_3_QUICK_START.md                # Guía rápida de inicio
@@ -354,7 +354,7 @@ La capa de servicios de IA ya quedó encapsulada e independiente. El cierre ofic
 Los modelos Django y el DDL manual ya quedaron definidos. El cierre oficial está en [backend/FASE_2_COMPLETADA.md](backend/FASE_2_COMPLETADA.md).
 
 ### Siguiente Paso
-Continuar con Fase 3 usando el plan detallado en [Doc/PLAN_MIGRACION_INCREMENTALV2.md](./Doc/PLAN_MIGRACION_INCREMENTALV2.md).
+Continuar con Fase 3 usando el plan detallado en [Doc/PLAN_MIGRACION.md](./Doc/PLAN_MIGRACION.md).
 
 ---
 
@@ -406,7 +406,7 @@ redis-server  # En Windows, instala desde: https://github.com/microsoftarchive/r
 ## 🤝 Contribuciones
 
 Cuando trabajes en una fase:
-1. Lee el plan de esa fase en [PLAN_MIGRACION_INCREMENTALV2.md](./Doc/PLAN_MIGRACION_INCREMENTALV2.md)
+1. Lee el plan de esa fase en [PLAN_MIGRACION.md](./Doc/PLAN_MIGRACION.md)
 2. Sigue las [ESPECIFICACION_DESARROLLO.md](./Doc/ESPECIFICACION_DESARROLLO.md)
 3. Actualiza este README cuando completes una fase
 4. Documenta cambios en los archivos de `Doc/`

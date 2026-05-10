@@ -1,6 +1,8 @@
 # FASE 3: GUÍA PRÁCTICA DE INICIO RÁPIDO
 
-**Objetivo**: Implementar los primeros endpoints REST en Django que expongan los servicios IA (YOLO para pose, LSTM para comportamiento).
+**Objetivo**: Servir como referencia histórica y técnica de la Fase 3 ya implementada en el backend Django.
+
+**Importante**: La Fase 3 ya quedó implementada a nivel base en `backend/`; este documento conserva el contexto técnico y los ejemplos de uso para prueba y mantenimiento.
 
 ---
 

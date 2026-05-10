@@ -1,6 +1,8 @@
 # FASE 3: Endpoints REST Básicos - Iteración 1 Completada ✅
 
-**Estado**: ⏳ Estructura Base Implementada - Integración IA Pendiente
+**Estado**: ⏳ Estructura Base Implementada - Integración IA, persistencia y pruebas pendientes
+
+**Alcance real de esta iteración**: se creó la base documental y la estructura de ViewSets/serializers/routers, pero todavía no hay una implementación productiva completa de los endpoints.
 
 **Fecha de Inicio**: 2026-05-03
 **Fecha de Finalización de Iteración 1**: 2026-05-03
@@ -37,39 +39,22 @@
 
 #### **backend/apps/analysis/serializers.py** (400+ líneas)
 ```
-✅ KeypointSerializer - COCO 17-points
-✅ ImageUploadSerializer, ImageProcessingResponseSerializer, ImageResizeSerializer, ImageSaveSerializer
-✅ VideoUploadSerializer, VideoUploadFormSerializer, VideoProcessingRequestSerializer, VideoProcessingResponseSerializer
-✅ DetectionEventSerializer, PersonKeypointsSerializer
-✅ AnalysisReportSerializer, VideoResultsSerializer
-✅ SSE Event Serializers (Progress, Detection, Completed)
-✅ GenerateFramesRequestSerializer, GenerateFramesResponseSerializer, FrameDataSerializer
-✅ Error Response Serializers (Error, ValidationError, NotFoundError, ServerError)
+✅ Base de serializers creada para imagen, video, detecciones y frames
+✅ Estructuras de respuesta definidas para los endpoints de Fase 3
+✅ Serializers de soporte para errores, SSE y persistencia
 ```
 
 #### **backend/apps/analysis/views.py** (550+ líneas)
 ```
-✅ ImageAnalysisViewSet
-   - POST /images/upload/ - YOLO processing (template)
-   - POST /images/resize/ - Redimensionamiento (template)
-   - POST /images/save/ - Persistencia BD (template)
-
-✅ VideoAnalysisViewSet
-   - POST /videos/upload/ - Video upload (template)
-   - POST /videos/{id}/process/ - HTTP 202 accepted (template)
-   - GET /videos/{id}/stream/ - SSE streaming (template)
-   - GET /videos/{id}/results/ - Detecciones consolidadas (template)
-   - GET /videos/{id}/download/ - Descarga video (template)
-
-✅ FrameGenerationViewSet
-   - POST /frames/generate-from-video/ - Frame extraction (template)
+✅ ImageAnalysisViewSet, VideoAnalysisViewSet y FrameGenerationViewSet creados
+✅ Rutas y acciones base definidas para upload, process, stream, results, download y generate-from-video
+✅ La lógica de IA y la persistencia fina siguen pendientes de integración
 ```
 
 #### **backend/apps/analysis/urls.py** (actualizado)
 ```
 ✅ DefaultRouter con 3 ViewSets registrados
-✅ Rutas automáticas para todos los endpoints
-✅ Comentario con rutas explícitas alternativas
+✅ Rutas automáticas para todos los endpoints de Fase 3
 ```
 
 ### 3. Arquitectura REST Implementada ✅

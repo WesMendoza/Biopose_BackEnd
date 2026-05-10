@@ -87,6 +87,18 @@ Este glosario explica los términos técnicos que se usan en la migración. La i
 | Stateless : API sin estado: cada solicitud es independiente, no depende de solicitudes previas. REST es stateless. |
 | Idempotent : Operación que produce el mismo resultado si se ejecuta múltiples veces. GET y DELETE son idempotentes. |
 
+### Términos añadidos (Fase 3 - refinamiento)
+
+| Término | Significado |
+|-------------------|----------------------------------------------------------------------------------------------------|
+| OpenAPI : Especificación estándar para describir APIs REST de forma estructurada y legible por herramientas. |
+| Swagger : Conjunto de herramientas para visualizar, probar y documentar APIs definidas con OpenAPI. |
+| Rate Limiting : Técnica para limitar la cantidad de solicitudes por usuario o ventana de tiempo y proteger la API. |
+| StreamingHttpResponse : Respuesta de Django para enviar contenido en flujo continuo, útil para SSE. |
+| FileResponse : Respuesta de Django para devolver archivos binarios, como videos o descargas procesadas. |
+| MEDIA_ROOT : Directorio base configurado en Django para almacenar archivos subidos y generados. |
+| Celery Task ID : Identificador único de una tarea asíncrona en Celery, usado para consultar su estado. |
+
 
 
 ### Nota de uso

@@ -2,33 +2,15 @@
 SERIALIZERS - Fase 3: Endpoints REST Básicos
 ============================================
 
-Este módulo define los serializers de Django REST Framework para:
-- Procesamiento de imágenes (YOLO)
-- Procesamiento de videos (LSTM)
-- Generación de frames
-
-Referencias:
-- FASE_3_ESPECIFICACION.md - Especificación de endpoints y respuestas
-- FASE_3_QUICK_START.md - Guía de implementación
+Serializers para imágenes, videos, detecciones, reportes y eventos SSE.
 """
 
 from rest_framework import serializers
-from .models import VideoUpload, DetectionEvent, PersonKeypoints, AnalysisReport
 
+from .models import AnalysisReport, DetectionEvent, PersonKeypoints, VideoUpload
 
-# ============================================================================
-# SERIALIZERS - KEYPOINTS Y PUNTOS CLAVE
-# ============================================================================
 
 class KeypointSerializer(serializers.Serializer):
-    """
-    Serializa un punto clave (keypoint COCO).
-    
-    Estructura COCO 17-points:
-    - 5 puntos: cara (0: nariz, 1-2: ojos, 3-4: orejas)
-    - 6 puntos: brazos (5-6: hombros, 7-8: codos, 9-10: muñecas)
-    - 6 puntos: piernas (11-12: caderas, 13-14: rodillas, 15-16: tobillos)
-    """
     id = serializers.IntegerField()
     name = serializers.CharField(max_length=50)
     x = serializers.FloatField()
@@ -37,32 +19,25 @@ class KeypointSerializer(serializers.Serializer):
     confidence = serializers.FloatField()
 
 
-# ============================================================================
-# SERIALIZERS - PROCESAMIENTO DE IMÁGENES
-# ============================================================================
-
-class ImageUploadSerializer(serializers.Serializer):
-    """Recibir imagen para procesar con YOLO."""
-    image = serializers.ImageField()
-    width = serializers.IntegerField(required=False, allow_null=True)
-    height = serializers.IntegerField(required=False, allow_null=True)
-
-
 class ImageDimensionsSerializer(serializers.Serializer):
-    """Dimensiones de una imagen."""
     original_width = serializers.IntegerField()
     original_height = serializers.IntegerField()
     processed_width = serializers.IntegerField()
     processed_height = serializers.IntegerField()
 
 
+class ImageUploadSerializer(serializers.Serializer):
+    image = serializers.ImageField()
+    width = serializers.IntegerField(required=False, allow_null=True)
+    height = serializers.IntegerField(required=False, allow_null=True)
+
+
 class ImageProcessingResponseSerializer(serializers.Serializer):
-    """Respuesta de procesamiento de imagen con YOLO."""
     id = serializers.IntegerField()
     message = serializers.CharField()
     filename = serializers.CharField()
     path = serializers.CharField()
-    image_position = serializers.CharField()  # "horizontal", "vertical", "cuadrada"
+    image_position = serializers.CharField()
     keypoints = KeypointSerializer(many=True)
     image_dimensions = ImageDimensionsSerializer()
     processing_time_ms = serializers.IntegerField()
@@ -70,54 +45,45 @@ class ImageProcessingResponseSerializer(serializers.Serializer):
 
 
 class ImageResizeSerializer(serializers.Serializer):
-    """Solicitar redimensionamiento de imagen."""
     image = serializers.ImageField()
     width = serializers.IntegerField()
     height = serializers.IntegerField()
 
 
 class ImageSaveSerializer(serializers.Serializer):
-    """Guardar imagen + keypoints en BD."""
     image_id = serializers.IntegerField()
     keypoints = KeypointSerializer(many=True)
     image_metadata = serializers.DictField()
 
 
-# ============================================================================
-# SERIALIZERS - PROCESAMIENTO DE VIDEOS
-# ============================================================================
-
-class VideoUploadSerializer(serializers.ModelSerializer):
-    """Serializar VideoUpload de BD."""
-    class Meta:
-        model = VideoUpload
-        fields = ['id', 'nombre_original', 'ruta_archivo', 'tamaño_bytes',
-                  'duracion_segundos', 'estado', 'fecha_creacion']
-        read_only_fields = ['id', 'fecha_creacion']
-
-
 class VideoUploadFormSerializer(serializers.Serializer):
-    """Recibir video para subir."""
     video = serializers.FileField()
     description = serializers.CharField(max_length=500, required=False, allow_blank=True)
 
 
+class VideoUploadSerializer(serializers.Serializer):
+    id = serializers.IntegerField(source='idVideoUpload', read_only=True)
+    id_usuario = serializers.IntegerField(source='idUsuario_id', read_only=True, allow_null=True)
+    id_empresa = serializers.IntegerField(source='idEmpresa', read_only=True, allow_null=True)
+    nombre_original = serializers.CharField(source='nombreOriginal')
+    ruta_archivo = serializers.CharField(source='rutaArchivo')
+    tamanio_bytes = serializers.IntegerField(source='tamanioBytes')
+    duracion_segundos = serializers.FloatField(source='duracionSegundos', allow_null=True)
+    fps = serializers.FloatField(allow_null=True)
+    estado = serializers.CharField()
+    celery_task_id = serializers.CharField(source='celeryTaskId', allow_null=True)
+    fecha_carga = serializers.DateTimeField(source='fechaCarga', read_only=True)
+    fecha_procesamiento = serializers.DateTimeField(source='fechaProcesamiento', allow_null=True, required=False)
+
+
 class VideoProcessingRequestSerializer(serializers.Serializer):
-    """Solicitar procesamiento de video con LSTM."""
-    mode = serializers.ChoiceField(
-        choices=['operativo', 'analitico', 'debug'],
-        help_text="operativo: sin esqueleto | analitico: con esqueleto | debug: debug completo"
-    )
-    dimension = serializers.ChoiceField(
-        choices=['2D', '3D'],
-        help_text="2D: detección 2D | 3D: detección 3D"
-    )
-    fps_skip = serializers.IntegerField(required=False, default=1)
-    confidence_threshold = serializers.FloatField(required=False, default=0.75)
+    mode = serializers.ChoiceField(choices=['operativo', 'analitico', 'debug'])
+    dimension = serializers.ChoiceField(choices=['2D', '3D'])
+    fps_skip = serializers.IntegerField(required=False, default=1, min_value=1)
+    confidence_threshold = serializers.FloatField(required=False, default=0.75, min_value=0.0, max_value=1.0)
 
 
 class VideoProcessingResponseSerializer(serializers.Serializer):
-    """Respuesta al iniciar procesamiento (HTTP 202)."""
     id = serializers.IntegerField()
     status = serializers.CharField()
     task_id = serializers.CharField()
@@ -125,12 +91,7 @@ class VideoProcessingResponseSerializer(serializers.Serializer):
     started_at = serializers.DateTimeField()
 
 
-# ============================================================================
-# SERIALIZERS - EVENTOS Y DETECCIONES
-# ============================================================================
-
 class BoundingBoxSerializer(serializers.Serializer):
-    """Bounding box de una persona detectada."""
     x1 = serializers.IntegerField()
     y1 = serializers.IntegerField()
     x2 = serializers.IntegerField()
@@ -138,51 +99,47 @@ class BoundingBoxSerializer(serializers.Serializer):
     person_id = serializers.IntegerField()
 
 
-class DetectionSummarySerializer(serializers.Serializer):
-    """Resumen de una detección en un frame."""
-    frame_index = serializers.IntegerField()
-    timestamp_sec = serializers.FloatField()
-    detections = serializers.ListField()
-    bounding_boxes = BoundingBoxSerializer(many=True)
+class DetectionEventSerializer(serializers.Serializer):
+    id = serializers.IntegerField(source='idDetectionEvent', read_only=True)
+    video = serializers.IntegerField(source='idVideoUpload_id')
+    tipo_evento = serializers.CharField(source='tipoEvento')
+    confianza = serializers.FloatField()
+    frame_inicio = serializers.IntegerField(source='frameInicio')
+    frame_fin = serializers.IntegerField(source='frameFin')
+    segundo_inicio = serializers.FloatField(source='tiempoInicio')
+    segundo_fin = serializers.FloatField(source='tiempoFin')
+    detalles_json = serializers.JSONField(source='detalles', allow_null=True, required=False)
+    fecha_creacion = serializers.DateTimeField(source='fechaCreacion', read_only=True)
 
 
-class DetectionEventSerializer(serializers.ModelSerializer):
-    """Serializar evento detectado."""
-    class Meta:
-        model = DetectionEvent
-        fields = ['id', 'video', 'tipo_evento', 'confianza', 'frame_inicio',
-                  'frame_fin', 'segundo_inicio', 'segundo_fin', 'detalles_json',
-                  'fecha_creacion']
-        read_only_fields = ['id', 'fecha_creacion']
+class PersonKeypointsSerializer(serializers.Serializer):
+    id = serializers.IntegerField(source='idPersonKeypoints', read_only=True)
+    detection_event = serializers.IntegerField(source='idDetectionEvent_id')
+    person_id = serializers.IntegerField(source='personId')
+    frame_index = serializers.IntegerField(source='frameNumber')
+    keypoints_json = serializers.JSONField(source='keypointsJson')
+    fecha_creacion = serializers.DateTimeField(source='fechaCreacion', read_only=True)
 
 
-class PersonKeypointsSerializer(serializers.ModelSerializer):
-    """Serializar keypoints de persona detectada."""
-    class Meta:
-        model = PersonKeypoints
-        fields = ['id', 'detection_event', 'person_id', 'frame_index',
-                  'keypoints_json', 'fecha_creacion']
-        read_only_fields = ['id', 'fecha_creacion']
+class AnalysisReportSerializer(serializers.Serializer):
+    id = serializers.IntegerField(source='idAnalysisReport', read_only=True)
+    video = serializers.IntegerField(source='idVideoUpload_id')
+    total_detections = serializers.IntegerField(source='totalEventos')
+    detections_by_type = serializers.DictField(source='estadisticas', allow_null=True, required=False)
+    processing_time_seconds = serializers.FloatField(source='tiempoProcesamientoSegundos', allow_null=True)
+    resumen_json = serializers.JSONField(source='resumenJson', allow_null=True, required=False)
+    detections = serializers.SerializerMethodField()
+    fecha_creacion = serializers.DateTimeField(source='fechaCreacion', read_only=True)
+    fecha_actualizacion = serializers.DateTimeField(source='actualizadoEn', read_only=True)
 
-
-# ============================================================================
-# SERIALIZERS - REPORTES Y RESULTADOS
-# ============================================================================
-
-class AnalysisReportSerializer(serializers.ModelSerializer):
-    """Serializar reporte de análisis completo."""
-    detections = DetectionEventSerializer(source='detectionevent_set', many=True, read_only=True)
-    
-    class Meta:
-        model = AnalysisReport
-        fields = ['id', 'video', 'total_detections', 'detections_by_type',
-                  'processing_time_seconds', 'resumen_json', 'detections',
-                  'fecha_creacion', 'fecha_actualizacion']
-        read_only_fields = ['id', 'fecha_creacion', 'fecha_actualizacion']
+    def get_detections(self, obj):
+        video = getattr(obj, 'idVideoUpload', None)
+        if video is None:
+            return []
+        return DetectionEventSerializer(video.eventos.all(), many=True).data
 
 
 class VideoResultsSerializer(serializers.Serializer):
-    """Resultados consolidados de un video."""
     id = serializers.IntegerField()
     filename = serializers.CharField()
     status = serializers.CharField()
@@ -191,28 +148,22 @@ class VideoResultsSerializer(serializers.Serializer):
     duration_seconds = serializers.FloatField()
     processing_time_seconds = serializers.FloatField()
     detections = DetectionEventSerializer(many=True)
-    analysis_report = AnalysisReportSerializer()
+    analysis_report = AnalysisReportSerializer(allow_null=True, required=False)
     created_at = serializers.DateTimeField()
-    updated_at = serializers.DateTimeField()
+    updated_at = serializers.DateTimeField(allow_null=True, required=False)
 
-
-# ============================================================================
-# SERIALIZERS - SERVER-SENT EVENTS (SSE)
-# ============================================================================
 
 class SSEProgressEventSerializer(serializers.Serializer):
-    """Evento SSE de progreso."""
     video_id = serializers.IntegerField()
     progress_percent = serializers.IntegerField()
     current_frame = serializers.IntegerField()
     total_frames = serializers.IntegerField()
-    processing_time_elapsed_sec = serializers.IntegerField()
-    eta_seconds = serializers.IntegerField()
+    processing_time_elapsed_sec = serializers.FloatField()
+    eta_seconds = serializers.FloatField()
     timestamp = serializers.DateTimeField()
 
 
 class SSEDetectionEventSerializer(serializers.Serializer):
-    """Evento SSE de detección."""
     frame_index = serializers.IntegerField()
     timestamp_sec = serializers.FloatField()
     detections = serializers.ListField()
@@ -221,7 +172,6 @@ class SSEDetectionEventSerializer(serializers.Serializer):
 
 
 class SSECompletedEventSerializer(serializers.Serializer):
-    """Evento SSE de finalización."""
     video_id = serializers.IntegerField()
     status = serializers.CharField()
     total_detections = serializers.IntegerField()
@@ -229,19 +179,13 @@ class SSECompletedEventSerializer(serializers.Serializer):
     detections_summary = serializers.DictField()
 
 
-# ============================================================================
-# SERIALIZERS - GENERACIÓN DE FRAMES
-# ============================================================================
-
 class GenerateFramesRequestSerializer(serializers.Serializer):
-    """Solicitar generación de frames desde video."""
     video = serializers.FileField()
     fps_value = serializers.IntegerField(min_value=1, max_value=30)
-    max_duration_seconds = serializers.IntegerField(required=False, default=30)
+    max_duration_seconds = serializers.IntegerField(required=False, default=30, min_value=1)
 
 
 class FrameDataSerializer(serializers.Serializer):
-    """Datos de un frame generado."""
     frame_index = serializers.IntegerField()
     timestamp_sec = serializers.FloatField()
     filename = serializers.CharField()
@@ -250,40 +194,10 @@ class FrameDataSerializer(serializers.Serializer):
 
 
 class GenerateFramesResponseSerializer(serializers.Serializer):
-    """Respuesta de generación de frames."""
     video_filename = serializers.CharField()
     fps_extracted = serializers.IntegerField()
     total_frames_generated = serializers.IntegerField()
     duration_seconds = serializers.FloatField()
     frames = FrameDataSerializer(many=True)
     processing_time_ms = serializers.IntegerField()
-    message = serializers.CharField()
-
-
-# ============================================================================
-# SERIALIZERS - ERRORES
-# ============================================================================
-
-class ErrorResponseSerializer(serializers.Serializer):
-    """Respuesta de error estándar."""
-    error = serializers.CharField()
-    message = serializers.CharField()
-
-
-class ValidationErrorSerializer(serializers.Serializer):
-    """Respuesta de error de validación (400)."""
-    error = serializers.CharField()
-    message = serializers.CharField()
-    details = serializers.DictField(required=False)
-
-
-class NotFoundErrorSerializer(serializers.Serializer):
-    """Respuesta de recurso no encontrado (404)."""
-    error = serializers.CharField()
-    message = serializers.CharField()
-
-
-class ServerErrorSerializer(serializers.Serializer):
-    """Respuesta de error del servidor (500)."""
-    error = serializers.CharField()
     message = serializers.CharField()

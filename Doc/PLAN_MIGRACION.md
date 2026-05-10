@@ -1,10 +1,23 @@
-# Plan de Migración Incremental del Sistema
+# Plan de Migración de Arquitectura del Sistema
 
 ## Introducción
 
 Este documento define la estrategia para migrar gradualmente componentes del sistema Flask monolítico actual (ubicado en `Tesis/`) hacia la nueva arquitectura Django distribuida.
 
-La migración NO será de una sola vez, sino en **fases independientes y validables**, minimizando riesgos y permitiendo rollback si es necesario.
+El objetivo es separar responsabilidades, facilitar el mantenimiento, mejorar la escalabilidad y permitir que los procesos de detección y análisis puedan ejecutarse de forma desacoplada. La migración NO será de una sola vez, sino en **fases independientes y validables**, minimizando riesgos y permitiendo rollback si es necesario.
+
+## Estado Documental Actual
+
+La documentación activa del proyecto se mantiene en:
+
+- `ESTADO_DOCUMENTACION.md`
+- `PLAN_MIGRACION.md` (Este documento)
+- `FASE_3_ESPECIFICACION.md`
+- `FASE_3_COMPARATIVA_LEGACY_VS_DJANGO.md`
+- `FASE_3_QUICK_START.md`
+- `Glosario_Desarrollo.md`
+
+Los documentos obsoletos se trasladan a `Doc/archived/` para evitar mezclar referencias antiguas con el estado vigente.
 
 ## Estructura Actual vs Nueva
 
@@ -20,13 +33,22 @@ La migración NO será de una sola vez, sino en **fases independientes y validab
   - `templates/` - Vistas HTML
 
 ### Sistema Nuevo (backend/)
-- Backend Django puro sin lógica de UI
+- Backend Django puro sin lógica de UI (actuará como centro único de lógica de negocio)
 - Separación clara: API, Servicios, Datos, IA
 - Apps modulares:
   - `apps.users` - Gestión de usuarios, roles, permisos
   - `apps.analysis` - Detección de pose, comportamiento, análisis
   - `core` - Configuración centralizada
   - `services` - Lógica de integración reutilizable
+
+### Arquitectura Objetivo
+- **Django**: autenticación, permisos, menús, configuración, CRUD y panel administrativo.
+- **Django REST Framework**: endpoints para frontend y servicios externos.
+- **Django Channels**: WebSocket para progreso, alertas y resultados en tiempo real.
+- **Celery + Redis**: tareas distribuidas de detección y procesamiento pesado.
+- **PostgreSQL**: base de datos principal.
+- **Servicio IA separado**: inferencia de pose y comportamiento como módulos independientes del hilo principal web.
+- **Frontend actual**: cliente web consumiendo API y WebSocket (o a reemplazar por completo según la estrategia final).
 
 ## Fases de Migración
 
@@ -102,6 +124,8 @@ La migración NO será de una sola vez, sino en **fases independientes y validab
 **Objetivo**: Exponer servicios de detección a través de API REST y cubrir los flujos legacy de carga/procesamiento de imágenes y videos.
 
 **Estado**: ⏳ Análisis Completado - Implementación en Progreso
+
+**Nota de alcance**: la Iteración 1 dejó la base documental y la estructura de API; la integración real de IA, persistencia y pruebas sigue pendiente.
 
 **Análisis Realizado**:
 1. ✅ Identificadas 37 endpoints Flask legacy con métodos, parámetros y respuestas exactas
