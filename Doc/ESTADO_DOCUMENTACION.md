@@ -5,6 +5,7 @@
 - Fase 1: servicios de IA preparados y validados.
 - Fase 2: modelos Django y script SQL versionados y registrados.
 - Fase 3: endpoints REST implementados en backend y validados con `manage.py check`.
+- Fase 6: Autenticación migrada, JWT, permisos implementados (protección de endpoints) y documentación de endpoints (login/registro) finalizada.
 
 ## Documentos activos
 

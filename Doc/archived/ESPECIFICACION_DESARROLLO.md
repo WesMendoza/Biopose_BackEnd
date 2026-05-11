@@ -42,14 +42,18 @@ Los nombres de carpetas deben ser consistentes, sin variaciones innecesarias, y 
 
 ## Manejo de carpetas y nombres
 
-Se debe aplicar un control estricto sobre los nombres de carpetas y archivos.
+Se debe aplicar un control estricto sobre los nombres de carpetas, archivos y estructuras de sistema (Base de Datos).
 
 - Evitar nombres ambiguos, abreviaturas poco claras o duplicadas.
 - Usar nombres descriptivos que reflejen la funcion del contenido.
 - No mezclar archivos de desarrollo con archivos de ejecucion.
 - No guardar recursos temporales dentro de carpetas que forman parte del codigo productivo.
 
-Ejemplos de nombres correctos:
+**Convenciones de Base de Datos y Modelos:**
+- Usar formato **camelCase** tanto para los nombres de las Tablas (p. ej., `empresaUsuarioRol`, `menuOption`), como para nombres de sus columnas (p. ej., `codigoEmpresa`, `nombreOption`, `idUsuario`).
+- En el ORM de Django (`models.py`), replicar exactamente el standard **camelCase** para sus variables. En aquellas columnas que formen parte de una base *legacy*, forzar su emparejamiento con parámetros como `db_column='codigoEmpresa'` dentro de los *Field properties*.
+
+Ejemplos de nombres correctos en archivos y carpetas:
 
 - `database_scripts`
 - `migration_scripts`

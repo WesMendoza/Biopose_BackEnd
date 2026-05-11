@@ -9,10 +9,10 @@ SET search_path TO "Dev";
 -- ==========================================
 CREATE TABLE empresa (
   idEmpresa SERIAL PRIMARY KEY,
-  CodigoEmpresa VARCHAR(50),
+  codigoEmpresa VARCHAR(50),
   nombreEmpresa VARCHAR(150),
   direccion VARCHAR(255),
-  Ruc VARCHAR(20),
+  ruc VARCHAR(20),
   estado CHAR(1),
   usuarioCreacion VARCHAR(50),
   fechaCreacion TIMESTAMP,
@@ -45,9 +45,9 @@ CREATE TABLE rol (
   fechaModificacion TIMESTAMP
 );
 
-CREATE TABLE menuoption (
+CREATE TABLE menuOption (
   idOption SERIAL PRIMARY KEY,
-  nombreoption VARCHAR(100),
+  nombreOption VARCHAR(100),
   estado CHAR(1),
   usuarioCreacion VARCHAR(50),
   fechaCreacion TIMESTAMP,
@@ -80,7 +80,7 @@ CREATE TABLE parametrosCabecera (
   idParametrosCabecera SERIAL PRIMARY KEY,
   idEmpresa INT REFERENCES empresa(idEmpresa) ON DELETE CASCADE,
   nombreParametro VARCHAR(100),
-  codigoParmetro VARCHAR(50) UNIQUE, -- Necesario UNIQUE para la FK del detalle
+  codigoParametro VARCHAR(50) UNIQUE, -- Necesario UNIQUE para la FK del detalle
   estado CHAR(1),
   usuarioCreacion VARCHAR(50),
   fechaCreacion TIMESTAMP,

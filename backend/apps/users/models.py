@@ -15,10 +15,10 @@ class AuditableModel(models.Model):
 
 class Empresa(AuditableModel):
     idEmpresa = models.AutoField(primary_key=True)
-    CodigoEmpresa = models.CharField(max_length=50, null=True, blank=True)
+    codigoEmpresa = models.CharField(db_column='codigoEmpresa', max_length=50, null=True, blank=True)
     nombreEmpresa = models.CharField(max_length=150, null=True, blank=True)
     direccion = models.CharField(max_length=255, null=True, blank=True)
-    Ruc = models.CharField(max_length=20, null=True, blank=True)
+    ruc = models.CharField(db_column='ruc', max_length=20, null=True, blank=True)
 
     class Meta:
         db_table = 'empresa'
@@ -33,6 +33,10 @@ class Users(AuditableModel):
     correo = models.CharField(max_length=150, unique=True, null=True, blank=True)
     password = models.CharField(max_length=255, null=True, blank=True)
     ultimoIngreso = models.DateTimeField(null=True, blank=True)
+
+    @property
+    def is_authenticated(self):
+        return True
 
     class Meta:
         db_table = 'users'
@@ -50,10 +54,10 @@ class Rol(AuditableModel):
 
 class Menuoption(AuditableModel):
     idOption = models.AutoField(primary_key=True)
-    nombreoption = models.CharField(max_length=100, null=True, blank=True)
+    nombreOption = models.CharField(db_column='nombreOption', max_length=100, null=True, blank=True)
 
     class Meta:
-        db_table = 'menuoption'
+        db_table = 'menuOption'
         managed = False
 
 
@@ -82,7 +86,7 @@ class ParametrosCabecera(AuditableModel):
     idParametrosCabecera = models.AutoField(primary_key=True)
     idEmpresa = models.ForeignKey(Empresa, models.DO_NOTHING, db_column='idEmpresa', null=True, blank=True)
     nombreParametro = models.CharField(max_length=100, null=True, blank=True)
-    codigoParmetro = models.CharField(max_length=50, unique=True, null=True, blank=True)
+    codigoParametro = models.CharField(db_column='codigoParametro', max_length=50, unique=True, null=True, blank=True)
 
     class Meta:
         db_table = 'parametrosCabecera'
@@ -91,7 +95,7 @@ class ParametrosCabecera(AuditableModel):
 
 class ParametroDetalle(AuditableModel):
     idParametroDetalle = models.AutoField(primary_key=True)
-    codigoParametro = models.ForeignKey(ParametrosCabecera, models.DO_NOTHING, db_column='codigoParametro', to_field='codigoParmetro', null=True, blank=True)
+    codigoParametro = models.ForeignKey(ParametrosCabecera, models.DO_NOTHING, db_column='codigoParametro', to_field='codigoParametro', null=True, blank=True)
     nombreDetalle = models.CharField(max_length=100, null=True, blank=True)
     descripcion = models.CharField(max_length=255, null=True, blank=True)
     valor = models.CharField(max_length=255, null=True, blank=True)

@@ -276,9 +276,17 @@ class ImageAnalysisViewSet(viewsets.ViewSet):
 
 
 class VideoAnalysisViewSet(viewsets.ModelViewSet):
-    queryset = VideoUpload.objects.all()
     serializer_class = VideoUploadSerializer
     parser_classes = (MultiPartParser, FormParser)
+
+    def get_queryset(self):
+        # Allow filtering by user for video uploads
+        if self.request.user and self.request.user.is_authenticated:
+            return VideoUpload.objects.filter(idUsuario=self.request.user)
+        return VideoUpload.objects.none()
+
+    def perform_create(self, serializer):
+        serializer.save(idUsuario=self.request.user)
 
     @action(detail=False, methods=['post'])
     def upload(self, request):
