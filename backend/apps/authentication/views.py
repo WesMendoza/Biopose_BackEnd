@@ -14,7 +14,7 @@ class AuthViewSet(viewsets.ViewSet):
     Rutas de autenticación
     """
     permission_classes = [AllowAny]
-
+    #Metodo Login, recibe correo y contraseña, valida y retorna token JWT
     @action(detail=False, methods=['post'])
     def login(self, request):
         serializer = LoginSerializer(data=request.data)
@@ -29,41 +29,91 @@ class AuthViewSet(viewsets.ViewSet):
 
                 token = generate_jwt(user)
                 return Response({
-                    "token": token,
-                    "user": UsersSerializer(user).data
+                    "codigo": 200,
+                    "mensaje": "Inicio de sesión exitoso",
+                    "detalle": {
+                        "token": token,
+                        # "user": UsersSerializer(user).data
+                    }
                 }, status=status.HTTP_200_OK)
             except Users.DoesNotExist:
-                return Response({"error": "Credenciales inválidas o usuario inactivo"}, status=status.HTTP_401_UNAUTHORIZED)
+                return Response({
+                    "codigo": 401,
+                    "mensaje": "No autorizado",
+                    "detalle": "Credenciales inválidas o usuario inactivo"
+                }, status=status.HTTP_401_UNAUTHORIZED)
             
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
+        return Response({
+            "codigo": 400,
+            "mensaje": "Error de validación",
+            "detalle": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    #Metodo Register, recibe datos del usuario, valida y crea una nueva cuenta
     @action(detail=False, methods=['post'])
-    def register(self, request):
+    def registerAccount(self, request):
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
             params = serializer.validated_data
             if Users.objects.filter(correo=params['correo']).exists():
-                return Response({"error": "El correo ya está en uso."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({
+                    "codigo": 400,
+                    "mensaje": "Error en registro",
+                    "detalle": "El correo ya está en uso."
+                }, status=status.HTTP_400_BAD_REQUEST)
             if 'cedula' in params and Users.objects.filter(cedula=params['cedula']).exists():
-                return Response({"error": "La cédula ya está registrada."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({
+                    "codigo": 400,
+                    "mensaje": "Error en registro",
+                    "detalle": "La cédula ya está registrada."
+                }, status=status.HTTP_400_BAD_REQUEST)
 
             hashed_pass = hash_password(params['password'])
             user = serializer.save(password=hashed_pass, estado='A')
-            return Response(UsersSerializer(user).data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response({
+                "codigo": 201,
+                "mensaje": "Cuenta creada exitosamente",
+                "detalle": UsersSerializer(user).data
+            }, status=status.HTTP_201_CREATED)
+            
+        return Response({
+            "codigo": 400,
+            "mensaje": "Error de validación",
+            "detalle": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
 
-    @action(detail=False, methods=['post'], url_path='verify-cedula')
-    def verify_cedula(self, request):
+    #Metodo para verificar si una cédula ya existe en la base de datos
+    @action(detail=False, methods=['post'], url_path='verifyCedula')
+    def verifyCedula(self, request):
         serializer = VerifyCedulaSerializer(data=request.data)
         if serializer.is_valid():
             exists = Users.objects.filter(cedula=serializer.validated_data['cedula']).exists()
-            return Response({"exists": exists}, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response({
+                "codigo": 200,
+                "mensaje": "Verificación completada",
+                "detalle": {"exists": exists}
+            }, status=status.HTTP_200_OK)
+            
+        return Response({
+            "codigo": 400,
+            "mensaje": "Error de validación",
+            "detalle": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
 
-    @action(detail=False, methods=['post'], url_path='verify-email')
-    def verify_email(self, request):
+    #Metodo para verificar si un correo ya existe en la base de datos
+    @action(detail=False, methods=['post'], url_path='verifyEmail')
+    def verifyEmail(self, request):
         serializer = VerifyEmailSerializer(data=request.data)
         if serializer.is_valid():
             exists = Users.objects.filter(correo=serializer.validated_data['correo']).exists()
-            return Response({"exists": exists}, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response({
+                "codigo": 200,
+                "mensaje": "Verificación completada",
+                "detalle": {"exists": exists}
+            }, status=status.HTTP_200_OK)
+            
+        return Response({
+            "codigo": 400,
+            "mensaje": "Error de validación",
+            "detalle": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)

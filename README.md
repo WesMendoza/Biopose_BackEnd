@@ -162,13 +162,14 @@ La migración se realiza en **7 fases independientes y validables**:
 - Crear `consumers.py` para WebSocket
 - Emitir eventos desde Celery tasks
 
-### Fase 6️⃣: Autenticación JWT (Semana 4)
-**Status**: ⏳ Pendiente  
-**Objetivo**: Migrar login del Flask a Django
+### Fase 6️⃣: Autenticación JWT y Usuarios (Semana 4)
+**Status**: ✅ Completada (En Pruebas)  
+**Objetivo**: Migrar login, registro y CRUD de usuarios separando lógicamente Auth vs Gestión.
 **Cambios**:
-- Endpoint `/api/users/login/`
-- JWT tokens
-- Proteger endpoints con permisos
+- Creación de app `authentication` con rutas `/api/auth/` (`login`, `register`, `verify-cedula`, `verify-email`)
+- Refactorización de app `users` con rutas `/api/users/` para CRUD y borrado lógico
+- Generación y validación de tokens JWT manuales
+- Protección de endpoints con `IsAuthenticated`
 
 ### Fase 7️⃣: Configuración CORS (Semana 4-5)
 **Status**: ⏳ Pendiente  
@@ -272,11 +273,16 @@ Biopose_BackEnd/
 │   │   └── celery.py             # Configuración Celery (Fase 4)
 │   ├── apps/
 │   │   ├── users/
-│   │   │   ├── models.py         # Usuarios, roles, permisos
-│   │   │   ├── views.py          # Endpoints de usuarios
-│   │   │   ├── serializers.py    # Serialización de datos
+│   │   │   ├── models.py         # Usuarios, roles, permisos (DB schema)
+│   │   │   ├── views.py          # Endpoints CRUD de usuarios
+│   │   │   ├── serializers.py    # Serialización de datos de entidades
 │   │   │   ├── urls.py
 │   │   │   └── tests.py
+│   │   ├── authentication/
+│   │   │   ├── views.py          # Login, registro, verificaciones
+│   │   │   ├── serializers.py    # Serializadores auth
+│   │   │   ├── urls.py           # Rutas /api/auth/
+│   │   │   └── utils.py          # JWT generator y hash_password
 │   │   ├── analysis/
 │   │   │   ├── models.py         # VideoUpload, DetectionEvent, etc (Fase 2)
 │   │   │   ├── views.py          # Endpoints de análisis (Fase 3)
@@ -386,10 +392,10 @@ redis-server  # En Windows, instala desde: https://github.com/microsoftarchive/r
 | Estructura Django base | ✅ Listo | - |
 | Servicios de IA | ✅ Completado | 1 |
 | Modelos Django | ✅ Completado | 2 |
-| API REST | ⏳ Pendiente | 3 |
+| API REST | ⏳ En Progreso (Swagger OK) | 3 |
 | Celery + Redis | ⏳ Pendiente | 4 |
 | WebSocket | ⏳ Pendiente | 5 |
-| Autenticación JWT | ⏳ Pendiente | 6 |
+| Autenticación Auth/Users | ✅ Completado | 6 |
 | Configuración CORS | ⏳ Pendiente | 7 |
 
 ---

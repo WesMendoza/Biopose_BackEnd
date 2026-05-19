@@ -280,24 +280,28 @@ backend/media/
 
 ---
 
-### **Fase 6: Migración de Autenticación (Semana 4)**
+### **Fase 6: Migración de Autenticación y Usuarios (Semana 4)**
 
-**Objetivo**: Migrar sistema de login/permisos del Flask al Django.
+**Objetivo**: Migrar sistema de login/permisos del Flask al Django y separar lógicamente la autenticación de la administración de usuarios.
 
-**Tareas**:
-1. Crear endpoint de login: `/api/users/login/` (POST con email/password)
-2. Implementar JWT o Session tokens
-3. Crear decorador/permission class para proteger endpoints de IA
-4. Validar que usuarios solo accedan a sus propios análisis
+**Estado**: ✅ Refactorizada y en pruebas
 
-**Archivos a modificar**:
-- `backend/apps/users/views.py` (agregar LoginViewSet)
-- `backend/apps/users/serializers.py`
-- `backend/core/settings.py` (configurar JWT si aplica)
+**Tareas Completadas**:
+1. Creación de la app `apps.authentication`:
+   - Endpoint de login: `POST /api/auth/login/` (Valida usuario y retorna JWT)
+   - Endpoint de registro: `POST /api/auth/register/` (Crea usuario con contraseña encriptada)
+   - Endpoints de validación: `POST /api/auth/verify-email/` y `POST /api/auth/verify-cedula/`
+   - Implementación de `CustomJWTAuthentication` y utilidades de hashing y JWT nativo.
+2. Refactorización de la app `apps.users`:
+   - Mantenimiento estricto del CRUD RESTful para entidades (`Empresa`, `Users`, `Rol`, `Menuoption`).
+   - Endpoint: `GET /api/users/cedula/{cedula}/`
+   - Borrado lógico implementado en la acción `DELETE /api/users/{id}/`.
+3. Protección global de endpoints usando el decorador de permisos `IsAuthenticated` (drf).
 
-**Criterio de éxito**:
-- Login devuelve token válido
-- Endpoints protegidos rechaza sin token válido
+**Criterios de éxito alcanzados**:
+- Login devuelve token JWT válido.
+- Endpoints de infraestructura protegidos y rechazan sin token válido.
+- Separación de responsabilidad (Auth vs CRUD usuarios) implementada.
 
 ---
 
