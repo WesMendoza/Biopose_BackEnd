@@ -1,47 +1,15 @@
-from rest_framework import viewsets, views, status
+from rest_framework import viewsets, status
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny, IsAuthenticated
-from datetime import datetime
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.decorators import action
 
 from .models import Empresa, Users, Rol, Menuoption
 from .serializers import (
     EmpresaSerializer, 
     UsersSerializer, 
     RolSerializer, 
-    MenuoptionSerializer,
-    LoginSerializer
+    MenuoptionSerializer
 )
-from .authentication import hash_password, generate_jwt, CustomJWTAuthentication
-
-class AuthViewSet(viewsets.ViewSet):
-    """
-    Rutas de autenticación
-    """
-    permission_classes = [AllowAny]
-
-    def login(self, request):
-        serializer = LoginSerializer(data=request.data)
-        if serializer.is_valid():
-            correo = serializer.validated_data['correo']
-            password = serializer.validated_data['password']
-            hashed_pass = hash_password(password)
-
-            try:
-                user = Users.objects.get(correo=correo, password=hashed_pass, estado='A')
-                # Actualizar ultimoIngreso si se quiere
-                user.ultimoIngreso = datetime.now()
-                # user.save() # No podemos hacer save() directamente si mapped=False sin cuidado, pero intentemos 
-                # Si managed=False no impide guardar si la tabla existe.
-
-                token = generate_jwt(user)
-                return Response({
-                    "token": token,
-                    "user": UsersSerializer(user).data
-                }, status=status.HTTP_200_OK)
-            except Users.DoesNotExist:
-                return Response({"error": "Credenciales inválidas"}, status=status.HTTP_401_UNAUTHORIZED)
-            
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class EmpresaViewSet(viewsets.ModelViewSet):
     """
@@ -49,27 +17,36 @@ class EmpresaViewSet(viewsets.ModelViewSet):
     """
     queryset = Empresa.objects.all()
     serializer_class = EmpresaSerializer
+    permission_classes = [IsAuthenticated]
 
 class UsersViewSet(viewsets.ModelViewSet):
     """
     Controlador (ViewSet) para operaciones CRUD sobre Users
     """
-    queryset = Users.objects.all()
+    queryset = Users.objects.filter(estado='A')  # Solo listar usuarios activos por defecto
     serializer_class = UsersSerializer
+    permission_classes = [IsAuthenticated]
 
-    def get_permissions(self):
-        # Permitir registro sin token, requerir token para el resto (GET, PUT, DELETE)
-        if self.action == 'create':
-            return [AllowAny()]
-        return [IsAuthenticated()]
+    def destroy(self, request, *args, **kwargs):
+        """
+        Sobrescribimos el destroy para hacer un borrado lógico
+        """
+        user = self.get_object()
+        user.estado = 'I'
+        # user.save() # Ajustar según si allows save() directo en DB manual
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
-    def perform_create(self, serializer):
-        # Encriptamos la contraseña si viene en la carga útil del request
-        if 'password' in self.request.data:
-            hashed_pass = hash_password(self.request.data['password'])
-            serializer.save(password=hashed_pass)
-        else:
-            serializer.save()
+    @action(detail=False, methods=['get'], url_path='cedula/(?P<cedula>[^/.]+)')
+    def get_by_cedula(self, request, cedula=None):
+        """
+        Obtener usuario por cédula
+        """
+        try:
+            user = Users.objects.get(cedula=cedula, estado='A')
+            serializer = self.get_serializer(user)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Users.DoesNotExist:
+            return Response({"error": "Usuario no encontrado"}, status=status.HTTP_404_NOT_FOUND)
 
 class RolViewSet(viewsets.ModelViewSet):
     """
@@ -77,6 +54,7 @@ class RolViewSet(viewsets.ModelViewSet):
     """
     queryset = Rol.objects.all()
     serializer_class = RolSerializer
+    permission_classes = [IsAuthenticated]
 
 class MenuoptionViewSet(viewsets.ModelViewSet):
     """
@@ -84,4 +62,4 @@ class MenuoptionViewSet(viewsets.ModelViewSet):
     """
     queryset = Menuoption.objects.all()
     serializer_class = MenuoptionSerializer
-
+    permission_classes = [IsAuthenticated]

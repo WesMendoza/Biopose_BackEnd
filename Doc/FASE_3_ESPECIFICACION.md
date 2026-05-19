@@ -62,6 +62,8 @@ Retorna array de imágenes en base64
 
 ## 2. ESPECIFICACIÓN DE ENDPOINTS DJANGO
 
+> **Nota:** Todos estos endpoints se pueden visualizar y probar de forma interactiva a través de **Swagger UI** ingresando a `/api/docs/` en tu servidor de desarrollo.
+
 ### 2.1 GESTIÓN DE IMÁGENES
 
 #### **2.1.1 Subir y Procesar Imagen**

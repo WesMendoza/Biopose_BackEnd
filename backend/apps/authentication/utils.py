@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from django.conf import settings
 from rest_framework import authentication
 from rest_framework import exceptions
-from .models import Users
+from apps.users.models import Users
 
 def hash_password(password):
     return hashlib.sha256(password.encode('utf-8')).hexdigest()

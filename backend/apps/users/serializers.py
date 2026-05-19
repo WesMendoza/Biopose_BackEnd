@@ -24,7 +24,3 @@ class MenuoptionSerializer(serializers.ModelSerializer):
         model = Menuoption
         fields = '__all__'
 
-class LoginSerializer(serializers.Serializer):
-    correo = serializers.EmailField()
-    password = serializers.CharField(write_only=True)
-

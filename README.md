@@ -230,9 +230,9 @@ python -m venv venv
 ```
 *(Nota: Si PowerShell te niega permisos de ejecucion, debes correrlo como administrador y habilitarlos usando `Set-ExecutionPolicy RemoteSigned`)*
 
-Con el entorno activado, instala todas las dependencias requeridas del backend:
+Con el entorno activado, instala todas las dependencias requeridas usando el archivo `requirements.txt`:
 ```powershell
-pip install django djangorestframework channels celery redis psycopg2-binary python-dotenv
+pip install -r requirements.txt
 ```
 
 ### 4. Sincronizar Base de Datos

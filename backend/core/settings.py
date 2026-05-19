@@ -45,10 +45,12 @@ INSTALLED_APPS = [
     # Terceros
     'rest_framework',
     'channels',
+    'drf_spectacular',
     
     # Propias
     'apps.users',
     'apps.analysis',
+    'apps.authentication',
 ]
 
 MIDDLEWARE = [
@@ -149,10 +151,19 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ],
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'apps.users.authentication.CustomJWTAuthentication',
+        'apps.authentication.utils.CustomJWTAuthentication',
         'rest_framework.authentication.BasicAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+# Swagger / OpenAPI Settings
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Biopose API',
+    'DESCRIPTION': 'Documentación interactiva de los endpoints REST del backend Biopose',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
 }

@@ -193,6 +193,7 @@ Los documentos obsoletos se trasladan a `Doc/archived/` para evitar mezclar refe
 - ✅ SSE estándar para streaming
 - ✅ Consolidación de endpoints: -60% complejidad
 - ✅ JSON responses uniforme
+- ✅ **Documentación Interactiva Automática**: Integración de Swagger UI en `/api/docs/` usando `drf-spectacular` (OpenAPI 3.0)
 
 **Estructura de Almacenamiento**:
 ```
