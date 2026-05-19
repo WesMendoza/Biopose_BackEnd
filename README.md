@@ -40,7 +40,7 @@ Antes de levantar el proyecto, asegurate de contar con:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                   CLIENTE (Frontend)                         │
+│                   CLIENTE (Frontend)                        │
 │              (HTML/JS/CSS - Fase 7)                         │
 └────────────────────┬────────────────────────────────────────┘
                      │
@@ -50,16 +50,16 @@ Antes de levantar el proyecto, asegurate de contar con:
 (Fase 3)                    (Fase 5)
         │                         │
 ┌───────▼─────────────────────────▼──────┐
-│      DJANGO REST FRAMEWORK              │
+│      DJANGO REST FRAMEWORK             │
 │  (API + Autenticación + Lógica)        │
-│      (Fases 3, 6)                       │
-└─────────┬──────────────────┬────────────┘
+│      (Fases 3, 6)                      │
+└─────────┬──────────────────┬───────────┘
           │                  │
           │              ┌───▼──────────────┐
           │              │ Django Channels  │
-    ┌─────▼─────┐       │  (WebSocket)    │
-    │  Models   │       │  (Fase 5)        │
-    │  (Fase 2) │       └────────────────────┘
+    ┌─────▼─────┐        │  (WebSocket)     │
+    │  Models   │        │  (Fase 5)        │
+    │  (Fase 2) │        └──────────────────┘
     └───────────┘
           │
     ┌─────▼──────────────┐
@@ -69,17 +69,17 @@ Antes de levantar el proyecto, asegurate de contar con:
 
 ┌────────────────────────────────────────┐
 │    SERVICIOS DE IA (Encapsulados)      │
-│  - PoseModule (YOLO)                  │
-│  - BehaviorDetector (LSTM)            │
-│  - BehaviorDetector3D                 │
+│  - PoseModule (YOLO)                   │
+│  - BehaviorDetector (LSTM)             │
+│  - BehaviorDetector3D                  │
 │      (Fase 1)                          │
 └────────────────────────────────────────┘
 
 ┌────────────────────────────────────────┐
-│    CELERY WORKERS (Tareas Pesadas)    │
-│  - Video processing                   │
-│  - Pose detection                     │
-│  - Behavior analysis                  │
+│    CELERY WORKERS (Tareas Pesadas)     │
+│  - Video processing                    │
+│  - Pose detection                      │
+│  - Behavior analysis                   │
 │      (Fase 4)                          │
 └─────────────┬──────────────────────────┘
               │
@@ -94,7 +94,7 @@ Antes de levantar el proyecto, asegurate de contar con:
 La migración se realiza en **7 fases independientes y validables**:
 
 ### Fase 1️⃣: Preparación de Servicios de IA (Semana 1)
-**Status**: ⏳ Pendiente  
+**Status**: ✅ Completada  
 **Objetivo**: Encapsular modelos de IA sin depender de Flask/Django
 **Cambios**: 
 - Crear `backend/services/` con módulos independientes
@@ -107,21 +107,44 @@ La migración se realiza en **7 fases independientes y validables**:
 - `backend/services/resources/Conexion.py` es un adaptador legacy para acceso directo a PostgreSQL cuando todavía se necesite SQL crudo.
 - En esta etapa no reemplaza a Django ORM; solo sirve como puente temporal para componentes heredados.
 
+**Referencia de cierre**: [backend/FASE_1_COMPLETADA.md](backend/FASE_1_COMPLETADA.md)
+
 ### Fase 2️⃣: Modelos Django para Análisis (Semana 1-2)
-**Status**: ⏳ Pendiente  
-**Objetivo**: Definir BD con Django ORM
+**Status**: ✅ Completada  
+**Objetivo**: Definir BD con Django ORM y registrar los scripts SQL de forma manual
 **Cambios**:
 - Crear modelos: `VideoUpload`, `DetectionEvent`, `PersonKeypoints`, `AnalysisReport`
-- Ejecutar migraciones Django
+- Ejecutar scripts SQL manuales versionados en `backend/scripts/db/update/`
 - Validar creación de registros
 
+**Referencia de cierre**: [backend/FASE_2_COMPLETADA.md](backend/FASE_2_COMPLETADA.md)
+
 ### Fase 3️⃣: Endpoints REST Básicos (Semana 2)
-**Status**: ⏳ Pendiente  
-**Objetivo**: Exponer servicios a través de API
-**Cambios**:
-- Crear `serializers.py` y `views.py` en `apps/analysis`
-- Endpoints: `/api/analysis/upload-video/`, `/api/analysis/detect-pose/`, etc.
-- Validar con Postman/cURL
+**Status**: ⏳ Análisis Completado - Implementación en Progreso  
+**Objetivo**: Exponer servicios IA a través de REST API y cubrir flujos legacy
+**Análisis Realizado**: 
+- ✅ 37 endpoints legacy identificados y categorizados en [FASE_3_ESPECIFICACION.md](Doc/FASE_3_ESPECIFICACION.md)
+- ✅ Mapeo comparativo legacy→Django en [FASE_3_COMPARATIVA_LEGACY_VS_DJANGO.md](Doc/FASE_3_COMPARATIVA_LEGACY_VS_DJANGO.md)
+- ✅ Guía rápida de implementación en [FASE_3_QUICK_START.md](Doc/FASE_3_QUICK_START.md)
+
+**Endpoints Consolidados (9 principales)**:
+- **Imágenes**: `POST /api/analysis/images/upload/`, `POST /api/analysis/images/resize/`, `POST /api/analysis/images/save/`
+- **Videos**: `POST /api/analysis/videos/upload/`, `POST /api/analysis/videos/{id}/process/`, `GET /api/analysis/videos/{id}/stream/`, `GET /api/analysis/videos/{id}/results/`, `GET /api/analysis/videos/{id}/download/`
+- **Frames**: `POST /api/analysis/frames/generate-from-video/`
+
+**Mejoras respecto a Legacy**:
+- ✅ Endpoints RESTful (GET/POST/PUT/DELETE) en lugar de POST para todo
+- ✅ IDs en lugar de filenames para mejor trazabilidad
+- ✅ HTTP 202 Accepted para procesamiento asíncrono
+- ✅ SSE (Server-Sent Events) para streaming de progreso
+- ✅ Consolidación: 37 endpoints legacy → 9 endpoints principales
+
+**Servicios IA Integrados**:
+- YOLO v8s-pose: 17 keypoints COCO format
+- LSTM 3-clases: DISTURBIO, NEUTRAL, PELEAR
+- BehaviorDetector3D: Análisis 3D opcional
+
+**Nota**: Legacy NO tiene endpoint de entrenamiento; solo inferencia de modelos pre-entrenados.
 
 ### Fase 4️⃣: Celery + Redis (Semana 2-3)
 **Status**: ⏳ Pendiente  
@@ -139,13 +162,14 @@ La migración se realiza en **7 fases independientes y validables**:
 - Crear `consumers.py` para WebSocket
 - Emitir eventos desde Celery tasks
 
-### Fase 6️⃣: Autenticación JWT (Semana 4)
-**Status**: ⏳ Pendiente  
-**Objetivo**: Migrar login del Flask a Django
+### Fase 6️⃣: Autenticación JWT y Usuarios (Semana 4)
+**Status**: ✅ Completada (En Pruebas)  
+**Objetivo**: Migrar login, registro y CRUD de usuarios separando lógicamente Auth vs Gestión.
 **Cambios**:
-- Endpoint `/api/users/login/`
-- JWT tokens
-- Proteger endpoints con permisos
+- Creación de app `authentication` con rutas `/api/auth/` (`login`, `register`, `verify-cedula`, `verify-email`)
+- Refactorización de app `users` con rutas `/api/users/` para CRUD y borrado lógico
+- Generación y validación de tokens JWT manuales
+- Protección de endpoints con `IsAuthenticated`
 
 ### Fase 7️⃣: Configuración CORS (Semana 4-5)
 **Status**: ⏳ Pendiente  
@@ -207,16 +231,18 @@ python -m venv venv
 ```
 *(Nota: Si PowerShell te niega permisos de ejecucion, debes correrlo como administrador y habilitarlos usando `Set-ExecutionPolicy RemoteSigned`)*
 
-Con el entorno activado, instala todas las dependencias requeridas del backend:
+Con el entorno activado, instala todas las dependencias requeridas usando el archivo `requirements.txt`:
 ```powershell
-pip install django djangorestframework channels celery redis psycopg2-binary python-dotenv
+pip install -r requirements.txt
 ```
 
 ### 4. Sincronizar Base de Datos
 
-Luego de crear el esquema, aplica las migraciones internas de Django:
+Luego de crear el esquema, valida y ejecuta manualmente el script SQL correspondiente de la fase. La estructura del esquema debe actualizarse en `backend/scripts/db/create/Esquema BD.sql` para reflejar el estado real del diagrama.
 ```powershell
-python manage.py migrate
+# Ejecutar manualmente el script SQL de la fase en PostgreSQL
+# luego validar con manage.py check
+python manage.py check
 ```
 
 ## Levantar el Servidor de Desarrollo
@@ -247,11 +273,16 @@ Biopose_BackEnd/
 │   │   └── celery.py             # Configuración Celery (Fase 4)
 │   ├── apps/
 │   │   ├── users/
-│   │   │   ├── models.py         # Usuarios, roles, permisos
-│   │   │   ├── views.py          # Endpoints de usuarios
-│   │   │   ├── serializers.py    # Serialización de datos
+│   │   │   ├── models.py         # Usuarios, roles, permisos (DB schema)
+│   │   │   ├── views.py          # Endpoints CRUD de usuarios
+│   │   │   ├── serializers.py    # Serialización de datos de entidades
 │   │   │   ├── urls.py
 │   │   │   └── tests.py
+│   │   ├── authentication/
+│   │   │   ├── views.py          # Login, registro, verificaciones
+│   │   │   ├── serializers.py    # Serializadores auth
+│   │   │   ├── urls.py           # Rutas /api/auth/
+│   │   │   └── utils.py          # JWT generator y hash_password
 │   │   ├── analysis/
 │   │   │   ├── models.py         # VideoUpload, DetectionEvent, etc (Fase 2)
 │   │   │   ├── views.py          # Endpoints de análisis (Fase 3)
@@ -281,10 +312,16 @@ Biopose_BackEnd/
 │   │   ├── models/               # Pesos YOLO, LSTM
 │   │   ├── test_videos/
 │   │   └── training_videos/
-│   └── static/
-│       └── videos/
-│           ├── live/
-│           └── uploads/
+│   ├── media/                    # Archivos generados + uploads (Fase 3+)
+│   │   ├── images/
+│   │   │   ├── uploads/          # Imágenes subidas por usuario
+│   │   │   └── processed/        # Imágenes procesadas con YOLO
+│   │   └── videos/
+│   │       ├── uploads/          # Videos subidos sin procesar
+│   │       ├── processing/       # Videos en procesamiento
+│   │       └── results/          # Videos procesados con LSTM
+│   └── static/                   # Recursos estáticos (CSS, JS frontend)
+│       └── ...
 ├── frontend/                      # (Opcional) Frontend consumidor separado
 │   ├── index.html                 # Cliente web que consume API
 │   ├── js/
@@ -294,245 +331,36 @@ Biopose_BackEnd/
 │   ├── css/
 │   └── assets/
 ├── Doc/
-│   ├── PLAN_MIGRACION_INCREMENTALV2.md    # Plan detallado (todas las fases)
-│   ├── MIGRACION_ARQUITECTURA.md           # Arquitectura objetivo
-│   └── ESPECIFICACION_DESARROLLO.md        # Reglas y principios SOLID
-├── Tesis/                        # Código legacy (será deprecado)
-│   ├── src/
-│   │   ├── main.py               # Monolito Flask original
-│   │   ├── model/                # Modelos IA (PoseModule, BehaviorDetector, etc)
-│   │   ├── models/               # Pesos entrenados (LSTM)
-│   │   ├── Resources/            # Utilidades (Encrypt, Helper, etc)
-│   │   └── ...
-│   └── ...
-└── README.md                      # Este archivo
+│   ├── PLAN_MIGRACION.md    # Plan detallado (todas las fases)
+│   ├── FASE_3_ESPECIFICACION.md             # Especificación endpoints Fase 3
+│   ├── FASE_3_COMPARATIVA_LEGACY_VS_DJANGO.md # Mapeo Flask → Django
+│   ├── FASE_3_QUICK_START.md                # Guía rápida de inicio
+│   ├── MIGRACION_ARQUITECTURA.md            # Arquitectura objetivo
+│   ├── ESPECIFICACION_DESARROLLO.md         # Reglas y principios SOLID
+│   └── Glosario_Desarrollo.md               # Términos técnicos
+├── README.md
+├── yolov8s-pose.pt
+└── .gitignore
+
 ```
 
----
+**Cambios en Estructura de Archivos (Fase 3)**:
+- ✅ Nuevo directorio `backend/media/` para uploads y archivos generados
+- ✅ Subdirectorios por tipo: `images/`, `videos/`
+- ✅ Estados de procesamiento: `uploads/`, `processing/`, `results/`
+- ✅ Legacy usaba `Tesis/src/static/videos/`. Ahora centralizado en `backend/media/`
+
 
 ## 🔄 Guía por Fases de Desarrollo
 
-### ✅ AHORA: Fase 1 (Preparación de Servicios de IA)
+### Fase 1
+La capa de servicios de IA ya quedó encapsulada e independiente. El cierre oficial está en [backend/FASE_1_COMPLETADA.md](backend/FASE_1_COMPLETADA.md).
 
-Esta es la fase que iniciamos inmediatamente. El objetivo es crear una capa de servicios encapsulada que funcione independientemente de Django/Flask.
+### Fase 2
+Los modelos Django y el DDL manual ya quedaron definidos. El cierre oficial está en [backend/FASE_2_COMPLETADA.md](backend/FASE_2_COMPLETADA.md).
 
-#### Paso 1: Crear estructura de directorios
-```powershell
-cd backend
-mkdir services
-mkdir services\models
-mkdir services\resources
-# Crear archivos __init__.py en cada carpeta
-```
-
-#### Paso 2: Copiar módulos del Tesis
-Vamos a extraer los servicios del monolito Flask y colocarlos en el directorio de servicios:
-
-```
-De Tesis/src/model/                → a backend/services/models/
-├── PoseModule.py                  → PoseModule.py
-├── BehaviorDetector.py            → BehaviorDetector.py
-└── BehaviorDetector3d.py          → BehaviorDetector3d.py
-
-De Tesis/src/Resources/            → a backend/services/resources/
-├── Encrypt.py                     → Encrypt.py
-├── Helper.py                      → Helper.py
-├── Middleware.py                  → Middleware.py
-├── Conexion.py                    → Conexion.py (adaptar para no usar Flask)
-└── ...                            → ...
-```
-
-#### Paso 3: Crear servicios envolventes
-Crear archivos que encapsulen la lógica de IA sin dependencias de frameworks:
-
-```python
-# backend/services/pose_detection.py
-"""
-Servicio de detección de pose independiente de Django/Flask.
-Encapsula PoseModule para reutilización en diferentes contextos.
-"""
-from services.models.PoseModule import PoseModule
-import os
-
-class PoseDetectionService:
-    """Servicio de detección de postura humana usando YOLO."""
-    
-    def __init__(self, model_path: str = None):
-        """
-        Inicializa el servicio con el modelo YOLO.
-        
-        Args:
-            model_path: Ruta al archivo del modelo YOLO (ej: yolov8s-pose.pt)
-        """
-        if model_path is None:
-            model_path = os.getenv('POSE_MODEL_PATH', 'yolov8s-pose.pt')
-        
-        self.pose_module = PoseModule(model_path)
-    
-    def detect_pose_from_image(self, image_path: str):
-        """Detectar pose en una imagen."""
-        return self.pose_module.detect(image_path)
-    
-    def detect_pose_from_frame(self, frame):
-        """Detectar pose en un frame de video (numpy array)."""
-        return self.pose_module.detect_frame(frame)
-```
-
-```python
-# backend/services/behavior_detection.py
-"""Servicio de detección de comportamiento usando LSTM."""
-from services.models.BehaviorDetector import BehaviorDetector
-import os
-
-class BehaviorDetectionService:
-    """Servicio de detección de comportamiento (pelea, disturbio, etc)."""
-    
-    def __init__(self, model_path: str = None):
-        if model_path is None:
-            model_path = os.getenv('BEHAVIOR_MODEL_PATH', 'lstm_model.pt')
-        
-        self.behavior_detector = BehaviorDetector(model_path)
-    
-    def analyze_keypoints(self, keypoints_sequence):
-        """Analizar secuencia de keypoints y clasificar comportamiento."""
-        return self.behavior_detector.classify(keypoints_sequence)
-```
-
-```python
-# backend/services/config_loader.py
-"""
-Cargador de configuración centralizado.
-Define parámetros del sistema (thresholds, tamaños, etc).
-"""
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
-
-class AIConfig:
-    """Configuración de modelos de IA."""
-    
-    # Rutas de modelos
-    POSE_MODEL_PATH = os.getenv('POSE_MODEL_PATH', 'yolov8s-pose.pt')
-    BEHAVIOR_MODEL_PATH = os.getenv('BEHAVIOR_MODEL_PATH', 'lstm_model.pt')
-    BEHAVIOR_3D_MODEL_PATH = os.getenv('BEHAVIOR_3D_MODEL_PATH', 'lstm_3d_model.pt')
-    
-    # Parámetros de detección
-    POSE_CONFIDENCE_THRESHOLD = float(os.getenv('POSE_CONFIDENCE', 0.5))
-    BEHAVIOR_CONFIDENCE_THRESHOLD = float(os.getenv('BEHAVIOR_CONFIDENCE', 0.7))
-    
-    # Parámetros de video
-    VIDEO_FRAME_SKIP = int(os.getenv('FRAME_SKIP', 2))
-    SEQUENCE_LENGTH = int(os.getenv('SEQUENCE_LENGTH', 30))
-    
-    @classmethod
-    def to_dict(cls):
-        """Retorna configuración como diccionario."""
-        return {
-            'pose_model': cls.POSE_MODEL_PATH,
-            'behavior_model': cls.BEHAVIOR_MODEL_PATH,
-            'pose_threshold': cls.POSE_CONFIDENCE_THRESHOLD,
-            'behavior_threshold': cls.BEHAVIOR_CONFIDENCE_THRESHOLD,
-        }
-```
-
-#### Paso 4: Validar independencia
-Verificar que los servicios funcionan **sin Django ni Flask**:
-
-```powershell
-# Activar venv
-cd backend
-.\venv\Scripts\Activate.ps1
-
-# Probar importación de servicios
-python -c "from services.pose_detection import PoseDetectionService; print('✓ PoseDetectionService importado correctamente')"
-
-python -c "from services.behavior_detection import BehaviorDetectionService; print('✓ BehaviorDetectionService importado correctamente')"
-
-python -c "from services.config_loader import AIConfig; print('✓ Configuración cargada:', AIConfig.to_dict())"
-```
-
-#### Paso 5: Crear script de prueba simple
-Crear archivo `test_services.py` en la raíz de `backend/`:
-
-```python
-#!/usr/bin/env python
-"""Script de prueba para validar servicios de IA en Fase 1."""
-
-from services.pose_detection import PoseDetectionService
-from services.behavior_detection import BehaviorDetectionService
-from services.config_loader import AIConfig
-
-def test_pose_service():
-    """Prueba servicio de pose."""
-    print("🔍 Probando servicio de detección de pose...")
-    service = PoseDetectionService()
-    print(f"✓ Servicio inicializado con modelo: {AIConfig.POSE_MODEL_PATH}")
-    # Aquí irían pruebas con imágenes reales
-    print("✓ Servicio de pose listo para usar")
-
-def test_behavior_service():
-    """Prueba servicio de comportamiento."""
-    print("\n🔍 Probando servicio de detección de comportamiento...")
-    service = BehaviorDetectionService()
-    print(f"✓ Servicio inicializado con modelo: {AIConfig.BEHAVIOR_MODEL_PATH}")
-    # Aquí irían pruebas con secuencias reales
-    print("✓ Servicio de comportamiento listo para usar")
-
-def test_config():
-    """Prueba carga de configuración."""
-    print("\n⚙️  Configuración del Sistema:")
-    for key, value in AIConfig.to_dict().items():
-        print(f"  - {key}: {value}")
-
-if __name__ == '__main__':
-    print("=" * 60)
-    print("VALIDACIÓN FASE 1: SERVICIOS DE IA")
-    print("=" * 60)
-    
-    try:
-        test_config()
-        test_pose_service()
-        test_behavior_service()
-        print("\n" + "=" * 60)
-        print("✅ TODOS LOS SERVICIOS FUNCIONAN CORRECTAMENTE")
-        print("=" * 60)
-    except Exception as e:
-        print(f"\n❌ Error: {e}")
-        import traceback
-        traceback.print_exc()
-```
-
-Ejecutar test:
-```powershell
-python test_services.py
-```
-
-#### Criterio de Éxito de Fase 1:
-- ✅ Los 3 directorios (`models/`, `resources/`, `.py`) existen en `backend/services/`
-- ✅ Los servicios se importan sin errores
-- ✅ `AIConfig` carga correctamente desde `.env`
-- ✅ No hay dependencias de Django o Flask en los servicios
-- ✅ El script de prueba `test_services.py` ejecuta sin errores
-
----
-
-## ⚙️ Próximos Pasos (Fase 2)
-
-Una vez que Fase 1 esté completa:
-1. Definir modelos Django en `apps/analysis/models.py`
-2. Ejecutar `python manage.py makemigrations`
-3. Ejecutar `python manage.py migrate`
-4. Validar creación de tablas en PostgreSQL
-
----
-
-## 📚 Documentación Adicional
-
-- [Plan de Migración Detallado](./Doc/PLAN_MIGRACION_INCREMENTALV2.md) - Todas las fases y tareas
-- [Arquitectura Objetivo](./Doc/MIGRACION_ARQUITECTURA.md) - Explicación del cambio de arquitectura
-- [Especificaciones de Desarrollo](./Doc/ESPECIFICACION_DESARROLLO.md) - Normas y principios SOLID
-- [Glosario de Términos](./Doc/Glosario_Desarrollo.md) - Definiciones técnicas claras y mantenibles
+### Siguiente Paso
+Continuar con Fase 3 usando el plan detallado en [Doc/PLAN_MIGRACION.md](./Doc/PLAN_MIGRACION.md).
 
 ---
 
@@ -562,12 +390,12 @@ redis-server  # En Windows, instala desde: https://github.com/microsoftarchive/r
 | Componente | Estado | Fase |
 |-----------|--------|------|
 | Estructura Django base | ✅ Listo | - |
-| Servicios de IA | ⏳ Pendiente | 1 |
-| Modelos Django | ⏳ Pendiente | 2 |
-| API REST | ⏳ Pendiente | 3 |
+| Servicios de IA | ✅ Completado | 1 |
+| Modelos Django | ✅ Completado | 2 |
+| API REST | ⏳ En Progreso (Swagger OK) | 3 |
 | Celery + Redis | ⏳ Pendiente | 4 |
 | WebSocket | ⏳ Pendiente | 5 |
-| Autenticación JWT | ⏳ Pendiente | 6 |
+| Autenticación Auth/Users | ✅ Completado | 6 |
 | Configuración CORS | ⏳ Pendiente | 7 |
 
 ---
@@ -584,7 +412,7 @@ redis-server  # En Windows, instala desde: https://github.com/microsoftarchive/r
 ## 🤝 Contribuciones
 
 Cuando trabajes en una fase:
-1. Lee el plan de esa fase en [PLAN_MIGRACION_INCREMENTALV2.md](./Doc/PLAN_MIGRACION_INCREMENTALV2.md)
+1. Lee el plan de esa fase en [PLAN_MIGRACION.md](./Doc/PLAN_MIGRACION.md)
 2. Sigue las [ESPECIFICACION_DESARROLLO.md](./Doc/ESPECIFICACION_DESARROLLO.md)
 3. Actualiza este README cuando completes una fase
 4. Documenta cambios en los archivos de `Doc/`

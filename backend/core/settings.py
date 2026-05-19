@@ -45,10 +45,13 @@ INSTALLED_APPS = [
     # Terceros
     'rest_framework',
     'channels',
+    'drf_spectacular',
     
     # Propias
     'apps.users',
     'apps.analysis',
+    'apps.authentication',
+    'apps.gestionEmpresas',
 ]
 
 MIDDLEWARE = [
@@ -135,6 +138,9 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/6.0/ref/settings/#default-auto-field
 
@@ -143,13 +149,22 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Django REST Framework Settings
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny', # Permitir inicialmente para pruebas. Luego usar IsAuthenticated
+        'rest_framework.permissions.IsAuthenticated',
     ],
     'DEFAULT_AUTHENTICATION_CLASSES': [
+        'apps.authentication.utils.CustomJWTAuthentication',
         'rest_framework.authentication.BasicAuthentication',
         'rest_framework.authentication.SessionAuthentication',
-        # 'rest_framework_simplejwt.authentication.JWTAuthentication', # Configurable despues
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+# Swagger / OpenAPI Settings
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Biopose API',
+    'DESCRIPTION': 'Documentación interactiva de los endpoints REST del backend Biopose',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
 }
