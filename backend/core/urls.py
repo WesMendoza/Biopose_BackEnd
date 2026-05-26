@@ -26,6 +26,7 @@ urlpatterns = [
     path('api/users/', include('apps.users.urls')),
     path('api/gestionEmpresas/', include('apps.gestionEmpresas.urls')),
     path('api/analysis/', include('apps.analysis.urls')),
+    path('api/menuOpciones/', include('apps.menuOpciones.urls')),
     
     # Rutas para la documentación (Swagger)
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),

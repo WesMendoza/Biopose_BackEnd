@@ -51,6 +51,7 @@ CREATE TABLE rol (
 CREATE TABLE menuOption (
   idOption SERIAL PRIMARY KEY,
   nombreOption VARCHAR(100),
+  ruta VARCHAR(255),
   estado CHAR(1),
   usuarioCreacion VARCHAR(50),
   fechaCreacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -83,8 +84,14 @@ CREATE TABLE empresaUsuarioRol (
 
 CREATE TABLE rolOption (
   idRolOption SERIAL PRIMARY KEY,
+  idEmpresa INT REFERENCES empresa(idEmpresa) ON DELETE CASCADE,
   idRol INT REFERENCES rol(idRol) ON DELETE CASCADE,
-  idOption INT REFERENCES menuOption(idOption) ON DELETE CASCADE
+  idOption INT REFERENCES menuOption(idOption) ON DELETE CASCADE,
+  estado CHAR(1),
+  usuarioCreacion VARCHAR(50),
+  fechaCreacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  usuarioModificacion VARCHAR(50),
+  fechaModificacion TIMESTAMP
 );
 
 CREATE TABLE parametrosCabecera (

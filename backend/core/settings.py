@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     'apps.analysis',
     'apps.authentication',
     'apps.gestionEmpresas',
+    'apps.menuOpciones',
 ]
 
 MIDDLEWARE = [

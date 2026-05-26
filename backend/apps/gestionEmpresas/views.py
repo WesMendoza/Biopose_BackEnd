@@ -4,10 +4,10 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
 from django.db import transaction
 
-from .models import Empresa, Rol, Menuoption, EmpresaUsuarioRol, RolOption
+from .models import Empresa, Rol, EmpresaUsuarioRol
 from .serializers import (
-    EmpresaSerializer, RolSerializer, MenuoptionSerializer, 
-    EmpresaUsuarioRolSerializer, RolOptionSerializer
+    EmpresaSerializer, RolSerializer, 
+    EmpresaUsuarioRolSerializer
 )
 
 class BaseStandardViewSet(viewsets.ModelViewSet):
@@ -400,12 +400,6 @@ class RolViewSet(BaseStandardViewSet):
             "detalle": None
         }, status=status.HTTP_200_OK)
 
-
-class MenuoptionViewSet(BaseStandardViewSet):
-    queryset = Menuoption.objects.all()
-    serializer_class = MenuoptionSerializer
-    permission_classes = [IsAuthenticated]
-
 class EmpresaUsuarioRolViewSet(BaseStandardViewSet):
     """ 
     ViewSet para 'asignar' y gestionar la relación Empresa-Usuario-Rol 
@@ -559,10 +553,3 @@ class EmpresaUsuarioRolViewSet(BaseStandardViewSet):
             "mensaje": "Asignación de rol a empresa eliminada exitosamente (borrado lógico a 'I').",
             "detalle": None
         }, status=status.HTTP_200_OK)
-
-
-class RolOptionViewSet(BaseStandardViewSet):
-    """ ViewSet para 'asignar' y gestionar opciones de menú a los Roles """
-    queryset = RolOption.objects.all()
-    serializer_class = RolOptionSerializer
-    permission_classes = [IsAuthenticated]
