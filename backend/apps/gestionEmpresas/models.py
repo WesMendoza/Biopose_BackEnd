@@ -2,11 +2,11 @@ from django.db import models
 from apps.users.models import Users, AuditableModel
 
 class Empresa(AuditableModel):
-    idEmpresa = models.AutoField(primary_key=True)
+    idEmpresa = models.AutoField(primary_key=True, db_column='idEmpresa')
     codigoEmpresa = models.CharField(db_column='codigoEmpresa', max_length=50, null=True, blank=True)
-    nombreEmpresa = models.CharField(max_length=150, null=True, blank=True)
+    nombreEmpresa = models.CharField(db_column='nombreEmpresa', max_length=150, null=True, blank=True)
     direccion = models.CharField(max_length=255, null=True, blank=True)
-    ruc = models.CharField(db_column='ruc', max_length=20, null=True, blank=True)
+    ruc = models.CharField(max_length=20, null=True, blank=True)
 
     class Meta:
         db_table = 'empresa'
