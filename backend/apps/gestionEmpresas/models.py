@@ -22,16 +22,6 @@ class Rol(AuditableModel):
         db_table = 'rol'
         managed = False
 
-
-class Menuoption(AuditableModel):
-    idOption = models.AutoField(primary_key=True)
-    nombreOption = models.CharField(db_column='nombreOption', max_length=100, null=True, blank=True)
-
-    class Meta:
-        db_table = 'menuOption'
-        managed = False
-
-
 class EmpresaUsuarioRol(AuditableModel):
     idEmpresaUsuarioRol = models.AutoField(primary_key=True)
     idEmpresa = models.ForeignKey(Empresa, models.DO_NOTHING, db_column='idEmpresa', null=True, blank=True)
@@ -40,16 +30,6 @@ class EmpresaUsuarioRol(AuditableModel):
 
     class Meta:
         db_table = 'empresaUsuarioRol'
-        managed = False
-
-
-class RolOption(models.Model):
-    idRolOption = models.AutoField(primary_key=True)
-    idRol = models.ForeignKey(Rol, models.DO_NOTHING, db_column='idRol', null=True, blank=True)
-    idOption = models.ForeignKey(Menuoption, models.DO_NOTHING, db_column='idOption', null=True, blank=True)
-
-    class Meta:
-        db_table = 'rolOption'
         managed = False
 
 

@@ -22,6 +22,9 @@ Migrar el sistema de login, permisos y estructura multi-inquilino (tenant) del l
 4. **Refactor de Estructura de Respuesta**:
    - Para homogeneizar con la UI, todo output adopta la notación paramétrica universal `{ codigo, mensaje, detalle }`.
 
+5. **Auditoría Estandarizada por ID de Usuario**:
+   - En todo el sistema, los campos `usuarioCreacion` y `usuarioModificacion` han pasado a registrarse utilizando el identificador numérico único del usuario (`idUsuario`), sustituyendo aproximaciones pasadas (como registrar el correo electrónico). Si el proceso no dispone de contexto de usuario, se identifica como `'Sistema'`.
+
 ## Endpoints Configurados para Uso
 
 A continuación se listan los endpoints principales habilitados en esta fase:
@@ -50,6 +53,12 @@ A continuación se listan los endpoints principales habilitados en esta fase:
 ```
 *(No es necesario enviar `idEmpresa`; el backend lo auto-detecta basándose en la sesión del Administrador. Además, acepta `cedula` en lugar del ID numérico de usuario, e `idRol` o `rolId` indistintamente).*
 - Protegido para uso exclusivo de **Administradores**. Permite actualizarle el rol a los usuarios preexistentes en la empresa (ej. promover de "Invitado" a otro rol customizado) y también eliminar su permanencia de la empresa (borrado lógico de la asociación `EmpresaUsuarioRol`).
+
+### 5. Opciones de Menú por Roles (Menú Dinámico)
+- **Rutas CRUD Opciones de Menú**: `/api/menuOpciones/opciones/`
+- Permite la creación y gestión de opciones de menú (`menuOption`) que definen las rutas de la interfaz, su estado y a qué empresa pertenecen. Exclusivo para miembros que sean Administradores en la empresa.
+- **Rutas CRUD Rol-Opciones**: `/api/menuOpciones/asignarRolOpcion/`
+- Permite asignar (`rolOption`) las opciones de menú habilitadas a cada rol existente en la empresa. Con esto, el frontend puede mostrar u ocultar secciones dinámicamente según el rol del usuario autenticado. Exclusivo para Administradores.
 
 ***
 
