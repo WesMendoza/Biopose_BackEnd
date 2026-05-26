@@ -85,6 +85,11 @@ Reglas para estos scripts:
   5. **Registrar**: Documentar en el archivo de control (FASE_X_COMPLETADA.md) qué script se ejecutó, cuándo y resultado.
 - Debe existir trazabilidad de que script se ejecuto, en que orden, fecha y resultado en la documentacion de fase correspondiente.
 
+## Auditoría
+
+Todo registro creado o modificado en la base de datos debe ser auditado adecuadamente. 
+Para los campos de auditoría (como `usuarioCreacion`, `usuarioModificacion`, etc.), se debe utilizar el ID del usuario (`idUsuario`) en lugar del correo electrónico (`correo`) o nombre de usuario. Si el usuario no está autenticado o el proceso es automático, se debe utilizar el identificador por defecto `'Sistema'`.
+
 ## Manejo de .gitignore
 
 El proyecto debe tener un .gitignore bien definido para evitar subir archivos innecesarios, pesados o sensibles.

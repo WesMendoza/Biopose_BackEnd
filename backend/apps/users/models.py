@@ -5,10 +5,10 @@ class AuditableModel(models.Model):
     Modelo base abstracto que incluye campos de auditoría comunes a casi todas las tablas.
     """
     estado = models.CharField(max_length=1, default='A')
-    usuarioCreacion = models.CharField(max_length=50, null=True, blank=True)
-    fechaCreacion = models.DateTimeField(auto_now_add=True, null=True, blank=True)
-    usuarioModificacion = models.CharField(max_length=50, null=True, blank=True)
-    fechaModificacion = models.DateTimeField(auto_now=True, null=True, blank=True)
+    usuarioCreacion = models.CharField(db_column='usuarioCreacion', max_length=50, null=True, blank=True)
+    fechaCreacion = models.DateTimeField(db_column='fechaCreacion', auto_now_add=True, null=True, blank=True)
+    usuarioModificacion = models.CharField(db_column='usuarioModificacion', max_length=50, null=True, blank=True)
+    fechaModificacion = models.DateTimeField(db_column='fechaModificacion', auto_now=True, null=True, blank=True)
 
     class Meta:
         abstract = True

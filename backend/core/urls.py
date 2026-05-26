@@ -24,7 +24,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/auth/', include('apps.authentication.urls')),
     path('api/users/', include('apps.users.urls')),
-    path('api/gestion-empresas/', include('apps.gestionEmpresas.urls')),
+    path('api/gestionEmpresas/', include('apps.gestionEmpresas.urls')),
     path('api/analysis/', include('apps.analysis.urls')),
     
     # Rutas para la documentación (Swagger)

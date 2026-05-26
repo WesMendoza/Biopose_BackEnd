@@ -39,6 +39,7 @@ CREATE TABLE users (
 
 CREATE TABLE rol (
   idRol SERIAL PRIMARY KEY,
+  idEmpresa INT REFERENCES empresa(idEmpresa) ON DELETE CASCADE,
   nombreRol VARCHAR(100),
   estado CHAR(1),
   usuarioCreacion VARCHAR(50),

@@ -1,84 +1,59 @@
-# FASE 6: MIGRACIÓN DE AUTENTICACION COMPLETADA
+# FASE 6: MIGRACIÓN DE AUTENTICACION, USUARIOS, EMPRESAS Y ROLES (COMPLETADA)
 
 ## Objetivo
-Migrar el sistema de login y permisos del legado Flask al nuevo backend en Django, utilizando JWT para proteger los endpoints.
+Migrar el sistema de login, permisos y estructura multi-inquilino (tenant) del legado Flask al nuevo backend en Django. Se establece un modelo donde una instancia puede soportar múltiples Empresas con roles personalizables e independientes.
 
 ## Tareas Realizadas
 
-1. **Creación de los Endpoints de Autenticación**:
-   - **Login**:
-     - **URL**: `/api/users/login/` (POST)
-     - **Controlador**: `AuthViewSet.login` en `backend/apps/users/views.py`.
-     - **Descripción**: Autentica al usuario usando encriptación SHA256 para el password (compatibilidad con Flask legacy). Retorna los datos del usuario y un token JWT válido.
-   - **Registro (Creación de Usuario)**:
-     - **URL**: `/api/users/usuarios/` (POST)
-     - **Controlador**: `UsersViewSet` (heredado de `ModelViewSet`) en `backend/apps/users/views.py`.
-     - **Descripción**: Permite el registro o creación de un nuevo usuario en la plataforma enviando los datos correspondientes.
+1. **Creación de los Endpoints de Autenticación (`apps/authentication`)**:
+   - **Login**: Autenticación segura vía JWT.
+   - **Manejo de Sesión**: Inclusión de llaves codificadas base SHA256 (compatibilidad Flask) expuestas en `/api/auth/login/`
 
-2. **Implementación de JSON Web Tokens (JWT)**:
-   - Instalación de la librería `pyjwt`.
-   - Se creó `CustomJWTAuthentication` en `backend/apps/users/authentication.py` para emitir y validar llaves de sesión (JWT) utilizando como carga útil el idUsuario.
+2. **Endpoints de Gestión de Usuarios (`apps/users`)**:
+   - **Registro (Creación de Cuenta)** en `/api/users/`.
+   - **CRUD base**: Borrado lógico nativo protegido bajo JWT.
 
-3. **Protección de Endpoints IA**:
-   - Ajuste en `backend/core/settings.py` incluyendo `IsAuthenticated` como política por defecto en todo `REST_FRAMEWORK`.
-   - La API ahora devuelve HTTP `401 Unauthorized` si no existe la cabecera `Authorization: Bearer <token>`.
+3. **Arquitectura Multi-Tenant (Empresas y Roles)** en `apps/gestionEmpresas`:
+   - Extracción de la lógica de negocio a un dominio `Empresa`.
+   - **Roles Dinámicos y Específicos por Empresa**: La tabla `rol` fue alterada (`idEmpresa` FK). Ahora los roles no son globales obligatoriamente; cada empresa tiene los suyos.
+   - **Asignación Genérica Automática**: Se modificaron los endpoints (`asignarEmpresa`) para que si un usuario estándar ingresa mediante el `codigoEmpresa`, por defecto adquiera el rol `Invitado` instanciado para esa empresa.
+   - Las validaciones internas ahora consultan a la tabla puente `EmpresaUsuarioRol` identificando siempre cuando alguien actúa como `"Administrador"` antes de modificar Empresa o crear/modificar Roles corporativos.
 
-4. **Validar Autorización en Análisis Propios**:
-   - En `backend/apps/analysis/views.py`, en el controlador `VideoAnalysisViewSet` se modificó el método asincrónico para asignar videos al usuario propietario al cargarse.
-   - El listado e interacción (`get_queryset`) ahora filtra estrictamente por `self.request.user`, permitiendo sólo a los dueños ver y modificar archivos y sus reportes.
+4. **Refactor de Estructura de Respuesta**:
+   - Para homogeneizar con la UI, todo output adopta la notación paramétrica universal `{ codigo, mensaje, detalle }`.
 
 ## Endpoints Configurados para Uso
 
 A continuación se listan los endpoints principales habilitados en esta fase:
 
 ### 1. Iniciar Sesión (Login)
-- **Ruta**: `POST /api/users/login/`
-- **Permisos**: Público (`AllowAny`)
-- **Body (JSON)**:
-  ```json
-  {
-    "correo": "usuario@ejemplo.com",
-    "password": "mi_password_secreto"
-  }
-  ```
-- **Respuesta Exitosa (200 OK)**:
-  ```json
-  {
-    "token": "eyJ0eXAi... (token JWT)",
-    "user": {
-      "idUsuario": 1,
-      "nombre": "Juan",
-      "apellido": "Pérez",
-      "correo": "usuario@ejemplo.com",
-      "ultimoIngreso": "2026-05-10T15:30:00Z"
-      // ... otros campos
-    }
-  }
-  ```
+- **Ruta**: `POST /api/auth/login/`
+- **Permisos**: Público
 
-### 2. Registro / Creación de cuenta
-- **Ruta**: `POST /api/users/usuarios/`
-- **Permisos**: Público (`AllowAny` temporalmente para permitir registrarse sin token previo, sujeto a ajuste según reglas de negocio finales)
-- **Body (JSON)**:
-  ```json
-  {
-    "nombre": "Juan",
-    "apellido": "Pérez",
-    "cedula": "1234567890",
-    "correo": "usuario@ejemplo.com",
-    "password": "mi_password_secreto"
-  }
-  ```
+### 2. Gestión de Empresas y Miembros (Multi-empresa)
+- **Crear Empresa** `POST /api/gestionEmpresas/empresas/`: (Registra empresa e inviste al creador como Administrador base).
+- **Asignarse a una Empresa** `POST /api/gestionEmpresas/empresas/asignarEmpresa/`: (Usuario se ancla sin rol administrativo por default o como 'Invitado' si se inicializó).
+- **Listar/Editar Empresa** `/api/gestionEmpresas/empresas/...`: Limitado a usuarios que contengan un registro `EmpresaUsuarioRol` como Administrador vigente.
 
-### 3. Listado y Gestión de Usuarios (CRUD)
-- **Listar**: `GET /api/users/usuarios/`
-- **Obtener uno**: `GET /api/users/usuarios/{id}/`
-- **Actualizar**: `PUT /api/users/usuarios/{id}/`
-- **Eliminar**: `DELETE /api/users/usuarios/{id}/`
-- **Permisos**: Requieren Token JWT (`Authorization: Bearer <token>`).
+### 3. Gestión y Personalización de Roles
+- **Rutas CRUD Roles**: `/api/gestionEmpresas/roles/`
+- Exclusivo para miembros que sean Administradores en la empresa. Útil para delegar o segmentar responsabilidades (ej. Rol "Supervisor de Cámaras"). Solo se retornan y modifican los de su propia empresa base. Permite borrado lógico ('A' activo, 'I' inactivo).
+
+### 4. Asignación y Reasignación de Roles a Usuarios
+- **Rutas CRUD Asignar Roles**: `POST /api/gestionEmpresas/asignarUsuarioRol/` (O `PUT/DELETE` mediante `/asignarUsuarioRol/{id}/`)
+- **Payload Permisible (Flexible)**:
+```json
+{
+    "cedula": "0987654321",
+    "idRol": 7
+}
+```
+*(No es necesario enviar `idEmpresa`; el backend lo auto-detecta basándose en la sesión del Administrador. Además, acepta `cedula` en lugar del ID numérico de usuario, e `idRol` o `rolId` indistintamente).*
+- Protegido para uso exclusivo de **Administradores**. Permite actualizarle el rol a los usuarios preexistentes en la empresa (ej. promover de "Invitado" a otro rol customizado) y también eliminar su permanencia de la empresa (borrado lógico de la asociación `EmpresaUsuarioRol`).
 
 ***
 
 ## Criterio de Éxito Cumplido
-✅ El Login devuelve un JWT completamente válido.
-✅ Los endpoints principales rechazan las peticiones anónimas sin token.
+✅ Migración de arquitectura multi-inquilino finalizada protegiendo la visibilidad y creación según el nivel Administrativo de la empresa.
+✅ Control de endpoints con JWT y formatos en Notación Camel Case y estándares uniformes de JSON.
+

@@ -7,10 +7,10 @@ from .views import (
 
 router = DefaultRouter()
 router.register(r'empresas', EmpresaViewSet)
-router.register(r'roles', RolViewSet)
-router.register(r'menu-opciones', MenuoptionViewSet)
-router.register(r'asignar-usuario-rol', EmpresaUsuarioRolViewSet, basename='asignar-user-rol')
-router.register(r'asignar-rol-opcion', RolOptionViewSet, basename='asignar-rol-opcion')
+router.register(r'roles', RolViewSet, basename='rol')
+router.register(r'menuOpciones', MenuoptionViewSet)
+router.register(r'asignarUsuarioRol', EmpresaUsuarioRolViewSet, basename='asignarUsuarioRol')
+router.register(r'asignarRolOpcion', RolOptionViewSet, basename='asignarRolOpcion')
 
 urlpatterns = [
     path('', include(router.urls)),

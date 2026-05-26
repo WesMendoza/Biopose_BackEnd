@@ -1,0 +1,1 @@
+ALTER TABLE "Dev".rol ADD COLUMN IF NOT EXISTS "idEmpresa" INT REFERENCES "Dev".empresa("idEmpresa") ON DELETE CASCADE;
