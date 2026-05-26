@@ -14,8 +14,9 @@ class Empresa(AuditableModel):
 
 
 class Rol(AuditableModel):
-    idRol = models.AutoField(primary_key=True)
-    nombreRol = models.CharField(max_length=100, null=True, blank=True)
+    idRol = models.AutoField(primary_key=True, db_column='idRol')
+    idEmpresa = models.ForeignKey(Empresa, models.DO_NOTHING, db_column='idEmpresa', null=True, blank=True)
+    nombreRol = models.CharField(db_column='nombreRol', max_length=100, null=True, blank=True)
 
     class Meta:
         db_table = 'rol'

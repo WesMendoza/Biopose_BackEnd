@@ -33,6 +33,14 @@ class BaseStandardViewSet(viewsets.ModelViewSet):
             "detalle": serializer.data
         })
 
+    def perform_create(self, serializer):
+        user_identifier = str(getattr(self.request.user, 'idUsuario', 'Sistema'))
+        serializer.save(usuarioCreacion=user_identifier, usuarioModificacion=user_identifier)
+
+    def perform_update(self, serializer):
+        user_identifier = str(getattr(self.request.user, 'idUsuario', 'Sistema'))
+        serializer.save(usuarioModificacion=user_identifier)
+
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
@@ -120,17 +128,29 @@ class EmpresaViewSet(BaseStandardViewSet):
 
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
+            user_identifier = str(getattr(request.user, 'idUsuario', 'Sistema'))
             # Crear la empresa
-            empresa = serializer.save(estado='A')
+            empresa = serializer.save(estado='A', usuarioCreacion=user_identifier, usuarioModificacion=user_identifier)
             
             # Generar el código de empresa basado en el ID y guardarlo
             empresa.codigoEmpresa = f"EMP{empresa.idEmpresa:03d}"
             empresa.save(update_fields=['codigoEmpresa'])
             
-            # Buscar o crear el Rol de Administrador
-            rol_admin, _ = Rol.objects.get_or_create(
-                nombreRol='Administrador', 
-                defaults={'estado': 'A'}
+            # Crear roles genericos para esta empresa internamente
+            rol_admin = Rol.objects.create(
+                idEmpresa=empresa,
+                nombreRol='Administrador',
+                estado='A',
+                usuarioCreacion=user_identifier,
+                usuarioModificacion=user_identifier
+            )
+            
+            Rol.objects.create(
+                idEmpresa=empresa,
+                nombreRol='Invitado',
+                estado='A',
+                usuarioCreacion=user_identifier,
+                usuarioModificacion=user_identifier
             )
 
             # Asignar la empresa al usuario que la creó, con el rol de Administrador
@@ -138,7 +158,9 @@ class EmpresaViewSet(BaseStandardViewSet):
                 idEmpresa=empresa,
                 idUsuario=request.user,
                 idRol=rol_admin,
-                estado='A'
+                estado='A',
+                usuarioCreacion=user_identifier,
+                usuarioModificacion=user_identifier
             )
 
             # Obtener datos con el código de empresa actualizado
@@ -240,61 +262,141 @@ class EmpresaViewSet(BaseStandardViewSet):
                 "detalle": None
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        # Asignar la empresa al usuario (dejamos el idRol en None, esperando que el Admin le asigne su rol más tarde)
+        # Buscar el rol de "Invitado" particular de esta empresa
+        try:
+            rol_invitado = Rol.objects.get(idEmpresa=empresa, nombreRol='Invitado', estado='A')
+        except Rol.DoesNotExist:
+            rol_invitado = None
+
+        # Asignar la empresa al usuario con el rol de Invitado
+        user_identifier = str(getattr(request.user, 'idUsuario', 'Sistema'))
         EmpresaUsuarioRol.objects.create(
             idEmpresa=empresa,
             idUsuario=usuarioSolicitante,
-            idRol=None,
-            estado='A'
+            idRol=rol_invitado,
+            estado='A',
+            usuarioCreacion=user_identifier,
+            usuarioModificacion=user_identifier
         )
 
         return Response({
             "codigo": status.HTTP_200_OK,
-            "mensaje": f"El usuario se ha unido exitosamente a la empresa '{empresa.nombreEmpresa}'.",
+            "mensaje": f"El usuario se ha unido exitosamente a la empresa '{empresa.nombreEmpresa}' con el rol de Invitado.",
             "detalle": None
         }, status=status.HTTP_200_OK)
 
 
 class RolViewSet(BaseStandardViewSet):
     """
-    Gestión de Roles (Para uso del Administrador).
+    Gestión de Roles asociados a cada Empresa.
     """
-    queryset = Rol.objects.filter(estado='A')  # Solo listar roles activos
     serializer_class = RolSerializer
     permission_classes = [IsAuthenticated]
 
+    def get_queryset(self):
+        """
+        Retorna sólo los roles de la empresa a la que pertenece el usuario administrador.
+        """
+        user_empresas = EmpresaUsuarioRol.objects.filter(
+            idUsuario=self.request.user, estado='A', idRol__nombreRol='Administrador'
+        ).values_list('idEmpresa', flat=True)
+        return Rol.objects.filter(estado='A', idEmpresa__in=user_empresas)
+
+    def _es_administrador(self, empresa_id):
+        return EmpresaUsuarioRol.objects.filter(
+            idUsuario=self.request.user, idEmpresa_id=empresa_id, idRol__nombreRol='Administrador', estado='A'
+        ).exists()
+
     def list(self, request, *args, **kwargs):
         """
-        [GET] /gestion-empresas/rol/
-        4. Consultar Rol (Obtiene lista de todos los roles activos)
+        [GET] /api/gestionEmpresas/roles/
+        Consultar Roles habilitados para la empresa del administrador logueado.
         """
         return super().list(request, *args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         """
-        [POST] /gestion-empresas/rol/
-        1. Crear Rol. 
+        [POST] /api/gestionEmpresas/roles/
+        Crear Rol (solo administradores pueden crear en su respectiva empresa)
         """
-        return super().create(request, *args, **kwargs)
+        import copy
+        
+        # Permitir modificación de parámetros de entrada
+        try:
+            data = request.data.copy()
+        except AttributeError:
+            data = copy.deepcopy(request.data)
+            
+        idEmpresa = data.get('idEmpresa')
+
+        # Auto-detectar de qué empresa es administrador si no lo provee
+        if not idEmpresa:
+            admin_record = EmpresaUsuarioRol.objects.filter(
+                idUsuario=request.user, 
+                idRol__nombreRol='Administrador', 
+                estado='A'
+            ).first()
+            if admin_record:
+                idEmpresa = admin_record.idEmpresa_id
+                data['idEmpresa'] = idEmpresa
+
+        if not idEmpresa or not self._es_administrador(idEmpresa):
+             return Response({
+                "codigo": status.HTTP_403_FORBIDDEN,
+                "mensaje": "Acceso restringido",
+                "detalle": "Sólo puede crear roles en las empresas que administra."
+            }, status=status.HTTP_403_FORBIDDEN)
+            
+        serializer = self.get_serializer(data=data)
+        if serializer.is_valid():
+            self.perform_create(serializer)
+            return Response({
+                "codigo": status.HTTP_201_CREATED,
+                "mensaje": "Registro creado exitosamente",
+                "detalle": serializer.data
+            }, status=status.HTTP_201_CREATED)
+            
+        return Response({
+            "codigo": status.HTTP_400_BAD_REQUEST,
+            "mensaje": "Error de validación",
+            "detalle": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
 
     def update(self, request, *args, **kwargs):
         """
-        [PUT/PATCH] /gestion-empresas/rol/{id}/
-        4. Editar Rol (Cambiar su nombre u otros atributos).
+        [PUT/PATCH] /api/gestionEmpresas/roles/{id}/
+        Editar Rol (solo administrador de la empresa dueña del rol)
         """
+        rol = self.get_object()
+        if not self._es_administrador(rol.idEmpresa_id):
+             return Response({
+                "codigo": status.HTTP_403_FORBIDDEN,
+                "mensaje": "Acceso restringido",
+                "detalle": "No tiene permisos para editar este rol."
+            }, status=status.HTTP_403_FORBIDDEN)
+             
         return super().update(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
         """
-        [DELETE] /gestion-empresas/rol/{id}/
-        4. Eliminar lógicamente rol (Cambia estado a 'I').
+        [DELETE] /api/gestionEmpresas/roles/{id}/
+        Eliminar lógicamente rol (Cambia estado a 'I' en vez de 'N' para ser consistente con el estatus del modelo general).
+        Sólo por el administrador.
         """
         rol = self.get_object()
+        if not self._es_administrador(rol.idEmpresa_id):
+             return Response({
+                "codigo": status.HTTP_403_FORBIDDEN,
+                "mensaje": "Acceso restringido",
+                "detalle": "No tiene permisos para eliminar este rol."
+            }, status=status.HTTP_403_FORBIDDEN)
+
         rol.estado = 'I'
+        rol.usuarioModificacion = str(getattr(request.user, 'idUsuario', 'Sistema'))
         rol.save()
         return Response({
             "codigo": status.HTTP_200_OK,
-            "mensaje": "Rol eliminado exitosamente (borrado lógico a 'I').",
+            "mensaje": "Rol inhabilitado exitosamente (estado = I).",
             "detalle": None
         }, status=status.HTTP_200_OK)
 
@@ -308,19 +410,79 @@ class EmpresaUsuarioRolViewSet(BaseStandardViewSet):
     """ 
     ViewSet para 'asignar' y gestionar la relación Empresa-Usuario-Rol 
     """
-    queryset = EmpresaUsuarioRol.objects.filter(estado='A')
     serializer_class = EmpresaUsuarioRolSerializer
     permission_classes = [IsAuthenticated]
 
+    def get_queryset(self):
+        """
+        Solo permite consultar asignaciones de la empresa donde el usuario es Administrador.
+        """
+        user_empresas = EmpresaUsuarioRol.objects.filter(
+            idUsuario=self.request.user, estado='A', idRol__nombreRol='Administrador'
+        ).values_list('idEmpresa', flat=True)
+        return EmpresaUsuarioRol.objects.filter(estado='A', idEmpresa__in=user_empresas)
+
+    def _es_administrador(self, empresa_id):
+        return EmpresaUsuarioRol.objects.filter(
+            idUsuario=self.request.user, idEmpresa_id=empresa_id, idRol__nombreRol='Administrador', estado='A'
+        ).exists()
+
     def create(self, request, *args, **kwargs):
         """
-        [POST] /gestion-empresas/asignar-usuario-rol/
+        [POST] /api/gestionEmpresas/asignarUsuarioRol/
         2. Asignar rol a usuario que tiene su empresa.
-        (Recibe idUsuario, idEmpresa, idRol)
+        (Puede recibir idUsuario o cedula, idRol o rolId, e idEmpresa opcional)
+        Solo permitdo para Administradores de la empresa
         """
-        id_usuario = request.data.get('idUsuario')
-        id_empresa = request.data.get('idEmpresa')
+        import copy
         
+        try:
+            data = request.data.copy()
+        except AttributeError:
+            data = copy.deepcopy(request.data)
+            
+        id_empresa = data.get('idEmpresa')
+        id_usuario = data.get('idUsuario')
+        cedula = data.get('cedula')
+        id_rol = data.get('idRol') or data.get('rolId')
+        
+        # Auto-detectar de qué empresa es administrador si no lo provee
+        if not id_empresa:
+            admin_record = EmpresaUsuarioRol.objects.filter(
+                idUsuario=request.user, 
+                idRol__nombreRol='Administrador', 
+                estado='A'
+            ).first()
+            if admin_record:
+                id_empresa = admin_record.idEmpresa_id
+                data['idEmpresa'] = id_empresa
+
+        # Validar permisos de administrador en la empresa destino
+        if not id_empresa or not self._es_administrador(id_empresa):
+            return Response({
+                "codigo": status.HTTP_403_FORBIDDEN,
+                "mensaje": "Acceso restringido",
+                "detalle": "Sólo un Administrador de la empresa puede reasignar roles de sus usuarios."
+            }, status=status.HTTP_403_FORBIDDEN)
+            
+        # Si se envía cédula en vez de idUsuario, buscar el usuario
+        if not id_usuario and cedula:
+            try:
+                from apps.users.models import Users
+                user_obj = Users.objects.get(cedula=cedula, estado='A')
+                id_usuario = user_obj.idUsuario
+                data['idUsuario'] = id_usuario
+            except Exception:
+                return Response({
+                    "codigo": status.HTTP_404_NOT_FOUND,
+                    "mensaje": "Usuario no encontrado",
+                    "detalle": "No existe un usuario activo con la cédula proporcionada."
+                }, status=status.HTTP_404_NOT_FOUND)
+                
+        # Asegurarnos de que el idRol se mapee correctamente para el serializer
+        if id_rol:
+            data['idRol'] = id_rol
+
         # Lógica para evitar duplicados si el usuario ya se unió a la empresa usando "asignarse_por_codigo"
         if id_usuario and id_empresa:
             asignacion = EmpresaUsuarioRol.objects.filter(
@@ -331,7 +493,7 @@ class EmpresaUsuarioRolViewSet(BaseStandardViewSet):
             
             if asignacion:
                 # Actualiza la asignación existente en lugar de crear otra nueva
-                serializer = self.get_serializer(asignacion, data=request.data, partial=True)
+                serializer = self.get_serializer(asignacion, data=data, partial=True)
                 if serializer.is_valid():
                     serializer.save()
                     return Response({
@@ -346,15 +508,51 @@ class EmpresaUsuarioRolViewSet(BaseStandardViewSet):
                 }, status=status.HTTP_400_BAD_REQUEST)
 
         # Si no existe asignación previa (creación manual completa), ejecuta la normal
-        return super().create(request, *args, **kwargs)
+        serializer = self.get_serializer(data=data)
+        if serializer.is_valid():
+            self.perform_create(serializer)
+            return Response({
+                "codigo": status.HTTP_201_CREATED,
+                "mensaje": "Registro creado exitosamente",
+                "detalle": serializer.data
+            }, status=status.HTTP_201_CREATED)
+            
+        return Response({
+            "codigo": status.HTTP_400_BAD_REQUEST,
+            "mensaje": "Error de validación",
+            "detalle": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    def update(self, request, *args, **kwargs):
+        """
+        [PUT/PATCH] /api/gestionEmpresas/asignarUsuarioRol/{id}/
+        Editar asignación
+        """
+        asignacion = self.get_object()
+        if not self._es_administrador(asignacion.idEmpresa_id):
+             return Response({
+                "codigo": status.HTTP_403_FORBIDDEN,
+                "mensaje": "Acceso restringido",
+                "detalle": "No tiene permisos para modificar roles en esta empresa."
+            }, status=status.HTTP_403_FORBIDDEN)
+        return super().update(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
         """
-        [DELETE] /gestion-empresas/asignar-usuario-rol/{id}/
-        3. Eliminar lógicamente rol de la empresa.
+        [DELETE] /api/gestionEmpresas/asignarUsuarioRol/{id}/
+        3. Eliminar lógicamente al usuario de la empresa (lo saca de la empresa).
         """
         instance = self.get_object()
+        
+        if not self._es_administrador(instance.idEmpresa_id):
+            return Response({
+                "codigo": status.HTTP_403_FORBIDDEN,
+                "mensaje": "Acceso restringido",
+                "detalle": "No tiene permisos para remover usuarios de esta empresa."
+            }, status=status.HTTP_403_FORBIDDEN)
+            
         instance.estado = 'I'
+        instance.usuarioModificacion = str(getattr(request.user, 'idUsuario', 'Sistema'))
         instance.save()
         return Response({
             "codigo": status.HTTP_200_OK,

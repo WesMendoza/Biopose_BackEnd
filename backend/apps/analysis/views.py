@@ -364,7 +364,7 @@ class VideoAnalysisViewSet(viewsets.ModelViewSet):
                         tiempoFin=detection_data['segundo_fin'],
                         personasInvolucradas=detection_data.get('personas_involucradas', 1),
                         detalles=detection_data.get('detalles', {}),
-                        usuarioCreacion=getattr(getattr(request, 'user', None), 'username', None),
+                        usuarioCreacion=str(getattr(request.user, 'idUsuario', 'Sistema')) if request and hasattr(request, 'user') else 'Sistema',
                     )
                     detections_created.append(detection)
 
@@ -375,7 +375,7 @@ class VideoAnalysisViewSet(viewsets.ModelViewSet):
                                 personId=kp_payload['person_id'],
                                 frameNumber=kp_payload['frame_index'],
                                 keypointsJson=kp_payload['keypoints_json'],
-                                usuarioCreacion=getattr(getattr(request, 'user', None), 'username', None),
+                                usuarioCreacion=str(getattr(request.user, 'idUsuario', 'Sistema')) if request and hasattr(request, 'user') else 'Sistema',
                             )
 
                 report, _ = AnalysisReport.objects.get_or_create(
@@ -392,7 +392,7 @@ class VideoAnalysisViewSet(viewsets.ModelViewSet):
                         'tiempoProcesamientoSegundos': analysis['processing_time_seconds'],
                         'estadisticas': analysis['summary'],
                         'resumenJson': analysis['summary'],
-                        'usuarioCreacion': getattr(getattr(request, 'user', None), 'username', None),
+                        'usuarioCreacion': str(getattr(request.user, 'idUsuario', 'Sistema')) if request and hasattr(request, 'user') else 'Sistema',
                     },
                 )
                 report.totalFrames = analysis['total_frames']
@@ -405,7 +405,7 @@ class VideoAnalysisViewSet(viewsets.ModelViewSet):
                 report.tiempoProcesamientoSegundos = analysis['processing_time_seconds']
                 report.estadisticas = analysis['summary']
                 report.resumenJson = analysis['summary']
-                report.usuarioModificacion = getattr(getattr(request, 'user', None), 'username', None)
+                report.usuarioModificacion = str(getattr(request.user, 'idUsuario', 'Sistema')) if request and hasattr(request, 'user') else 'Sistema'
                 report.save()
 
                 processed_filename = f'video_processed_{video.idVideoUpload}.mp4'

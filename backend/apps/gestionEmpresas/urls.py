@@ -7,7 +7,7 @@ from .views import (
 
 router = DefaultRouter()
 router.register(r'empresas', EmpresaViewSet)
-router.register(r'roles', RolViewSet)
+router.register(r'roles', RolViewSet, basename='rol')
 router.register(r'menuOpciones', MenuoptionViewSet)
 router.register(r'asignarUsuarioRol', EmpresaUsuarioRolViewSet, basename='asignarUsuarioRol')
 router.register(r'asignarRolOpcion', RolOptionViewSet, basename='asignarRolOpcion')
