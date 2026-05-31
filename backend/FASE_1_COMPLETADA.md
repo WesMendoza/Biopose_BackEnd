@@ -9,45 +9,24 @@
 - Agregado **Glosario de 20+ términos técnicos** (WebSocket, Behavior, Keypoints, CORS, JWT, etc.)
 - Actualizada tabla de estado de componentes
 
-### ✅ 2. Copie de Módulos del Tesis
-```
-✓ Tesis/src/model/PoseModule.py            → backend/services/models/PoseModule.py
-✓ Tesis/src/model/BehaviorDetector.py      → backend/services/models/BehaviorDetector.py
-✓ Tesis/src/model/BehaviorDetector3d.py    → backend/services/models/BehaviorDetector3d.py
-✓ Tesis/src/Resources/*                     → backend/services/resources/
-  - Encrypt.py
-  - Helper.py
-  - Conexion.py
-  - Middleware.py
-  - QueriesProcedures.py
-  - LibrariesRequired.txt
-```
+### ✅ 2. Limpieza de Módulos del Tesis (Arquitectura Limpia)
+- Se eliminaron dependencias legacy del tesis original (Flask, views repetidas, conexiones manuales de BD).
+- Los modelos abstractos pesados (`lstm_3clasesstride1.pt`, `yolov8s-pose.pt`) se ubican fuera del código productivo web y se enlazan mediante `config_loader.py`.
+- Se configuró el ORM de Django como manejador único (`managed=False` para control manual de la base de datos externa). Esto elimina la necesidad de conexiones `psycopg2` redundantes como `Conexion.py`.
 
-### ✅ 3. Estructura de Servicios Completada
+### ✅ 3. Estructura de Servicios Refactorizada
 ```
 backend/services/
 ├── __init__.py                 (existente)
-├── pose_detection.py           (existente - wrapper de YOLO)
-├── behavior_detection.py       (existente - wrapper de LSTM)
-├── config_loader.py            (existente - parámetros del sistema)
-├── models/
-│   ├── __init__.py            (creado)
-│   ├── PoseModule.py          (copiado)
-│   ├── BehaviorDetector.py    (copiado)
-│   └── BehaviorDetector3d.py  (copiado)
-└── resources/
-    ├── __init__.py             (creado)
-    ├── Encrypt.py             (copiado)
-    ├── Helper.py              (copiado)
-    ├── Conexion.py            (copiado)
-    ├── Middleware.py          (copiado)
-    ├── QueriesProcedures.py   (copiado)
-    └── LibrariesRequired.txt  (copiado)
+├── pose_detection.py           (wrapper de ultralytics YOLO)
+├── behavior_detection.py       (wrapper nativo de LSTM/PyTorch)
+├── video_processor.py          (procesamiento de frames)
+└── config_loader.py            (parámetros y pesos de IA)
 ```
 
 ### ✅ 4. Script de Prueba Creado
 - **Archivo**: `backend/test_services.py`
-- **Función**: Validar 5 aspectos clave de Fase 1
+- **Función**: Validar 3 aspectos clave de Fase 1 (Configuración, Pose, Behavior) mediante `camelCase`.
   1. Carga de configuración (SystemConfig)
   2. Disponibilidad de modelos copiados
   3. Importación de PoseDetectionService

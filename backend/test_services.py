@@ -18,7 +18,7 @@ import os
 # Agregar backend al path para importaciones
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-def test_config_loader():
+def testConfigLoader():
     """Prueba carga de configuración."""
     print("\n" + "=" * 70)
     print("📋 PASO 1: Validar Carga de Configuración")
@@ -64,40 +64,10 @@ def test_config_loader():
         return False
 
 
-def test_models_available():
-    """Prueba disponibilidad de modelos copiados."""
-    print("\n" + "=" * 70)
-    print("📦 PASO 2: Validar Modelos Copiados del Tesis")
-    print("=" * 70)
-    
-    models_dir = os.path.join(os.path.dirname(__file__), 'services', 'models')
-    expected_models = ['PoseModule.py', 'BehaviorDetector.py', 'BehaviorDetector3d.py']
-    
-    print(f"\nBuscando modelos en: {models_dir}\n")
-    
-    all_present = True
-    for model in expected_models:
-        model_path = os.path.join(models_dir, model)
-        if os.path.exists(model_path):
-            size_kb = os.path.getsize(model_path) / 1024
-            print(f"  ✓ {model} ({size_kb:.1f} KB)")
-        else:
-            print(f"  ❌ {model} - NO ENCONTRADO")
-            all_present = False
-    
-    if all_present:
-        print("\n✅ Todos los modelos están disponibles")
-        return True
-    else:
-        print("\n⚠️  Algunos modelos no se encuentran")
-        print("   Ejecuta: Copy-Item -Path 'Tesis\\src\\model\\*' -Destination 'backend\\services\\models\\' -Force")
-        return False
-
-
-def test_pose_detection_import():
+def testPoseDetectionImport():
     """Prueba importación de servicio de pose."""
     print("\n" + "=" * 70)
-    print("🧑 PASO 3: Validar Servicio de Detección de Pose")
+    print("🧑 PASO 2: Validar Servicio de Detección de Pose")
     print("=" * 70)
     
     try:
@@ -124,10 +94,10 @@ def test_pose_detection_import():
         return False
 
 
-def test_behavior_detection_import():
+def testBehaviorDetectionImport():
     """Prueba importación de servicio de comportamiento."""
     print("\n" + "=" * 70)
-    print("👁️  PASO 4: Validar Servicio de Detección de Comportamiento")
+    print("👁️  PASO 3: Validar Servicio de Detección de Comportamiento")
     print("=" * 70)
     
     try:
@@ -154,62 +124,6 @@ def test_behavior_detection_import():
         return False
 
 
-def test_resources_available():
-    """Prueba disponibilidad de recursos del Tesis."""
-    print("\n" + "=" * 70)
-    print("🔧 PASO 5: Validar Recursos Copiados del Tesis")
-    print("=" * 70)
-    
-    resources_dir = os.path.join(os.path.dirname(__file__), 'services', 'resources')
-    expected_resources = ['Encrypt.py', 'Helper.py', 'Conexion.py', 'Middleware.py', 'QueriesProcedures.py']
-    
-    print(f"\nBuscando recursos en: {resources_dir}\n")
-    
-    all_present = True
-    for resource in expected_resources:
-        resource_path = os.path.join(resources_dir, resource)
-        if os.path.exists(resource_path):
-            print(f"  ✓ {resource}")
-        else:
-            print(f"  ⚠ {resource} - no encontrado")
-    
-    print("\n✅ Recursos disponibles para integración")
-    return True
-
-
-def test_database_connection():
-    """Prueba la conexión legacy a PostgreSQL usando .env."""
-    print("\n" + "=" * 70)
-    print("🗄️  PASO 6: Validar Conexión a PostgreSQL")
-    print("=" * 70)
-
-    try:
-        from services.resources.Conexion import get_connection
-        connection = get_connection()
-
-        if connection is None:
-            print("❌ No se pudo crear la conexión con la base de datos")
-            print("   Revisa DB_HOST, DB_PORT, DB_NAME, DB_USER y DB_PASSWORD en .env")
-            return False
-
-        try:
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT 1")
-                result = cursor.fetchone()
-                print(f"✓ Query de prueba ejecutada: {result}")
-        finally:
-            connection.close()
-
-        print("✅ Conexión a PostgreSQL validada correctamente")
-        return True
-
-    except Exception as e:
-        print(f"❌ Error validando conexión a PostgreSQL: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-
 def main():
     """Ejecuta todos los tests."""
     print("\n")
@@ -219,47 +133,43 @@ def main():
     
     results = []
     
-    # Ejecutar todos los tests
-    results.append(("Configuración", test_config_loader()))
-    results.append(("Modelos Copiados", test_models_available()))
-    results.append(("Servicio Pose", test_pose_detection_import()))
-    results.append(("Servicio Comportamiento", test_behavior_detection_import()))
-    results.append(("Recursos", test_resources_available()))
-    results.append(("Conexión PostgreSQL", test_database_connection()))
+    results.append(testConfigLoader())
+    results.append(testPoseDetectionImport())
+    results.append(testBehaviorDetectionImport())
     
-    # Resumen final
     print("\n" + "=" * 70)
     print("📊 RESUMEN DE VALIDACIÓN")
     print("=" * 70)
     
-    passed = sum(1 for _, result in results if result)
-    total = len(results)
+    steps = [
+        "Configuración",
+        "Servicio Pose",
+        "Servicio Comportamiento"
+    ]
     
-    for test_name, result in results:
+    for i, (result, step) in enumerate(zip(results, steps)):
         status = "✅ PASS" if result else "❌ FAIL"
-        print(f"  {status} - {test_name}")
-    
+        print(f"  {status} - {step}")
+        
     print("\n" + "-" * 70)
+    passed = sum(1 for r in results if r)
+    total = len(results)
     print(f"Resultado: {passed}/{total} pruebas pasadas")
-    print("-" * 70)
+    print("-" * 70 + "\n")
     
     if passed == total:
-        print("\n✅ TODOS LOS SERVICIOS DE IA FUNCIONAN CORRECTAMENTE")
+        print("✅ TODOS LOS SERVICIOS DE IA FUNCIONAN CORRECTAMENTE")
         print("\n🎉 Fase 1 COMPLETADA - Servicios encapsulados e independientes")
         print("\n📝 Próximos pasos (Fase 2):")
         print("   1. Definir modelos Django en apps/analysis/models.py")
-        print("   2. Ejecutar: python manage.py makemigrations")
-        print("   3. Ejecutar: python manage.py migrate")
+        print("   2. Ejecutar PostgreSQL")
         return 0
     else:
-        print("\n⚠️  ALGUNAS PRUEBAS FALLARON")
-        print("\nAcciones recomendadas:")
-        print("   1. Verifica la instalación de dependencias")
-        print("   2. Revisa los logs de error arriba")
-        print("   3. Consulta el README.md de services/")
+        print("⚠️  HAY ERRORES EN LOS SERVICIOS")
+        print("   Revisa los logs anteriores para solucionar los problemas")
         return 1
 
-
-if __name__ == '__main__':
-    exit_code = main()
-    sys.exit(exit_code)
+if __name__ == "__main__":
+    sys.exit(main())
+    
+    # Ejecutar todos los tests

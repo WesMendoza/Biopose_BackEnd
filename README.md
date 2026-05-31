@@ -162,14 +162,14 @@ La migración se realiza en **7 fases independientes y validables**:
 - Crear `consumers.py` para WebSocket
 - Emitir eventos desde Celery tasks
 
-### Fase 6️⃣: Autenticación JWT y Usuarios (Semana 4)
-**Status**: ✅ Completada (En Pruebas)  
-**Objetivo**: Migrar login, registro y CRUD de usuarios separando lógicamente Auth vs Gestión.
+### Fase 6️⃣: Autenticación JWT, Usuarios y Multi-tenant (Semana 4)
+**Status**: ✅ Completada  
+**Objetivo**: Migrar login, registro y CRUD de usuarios, estableciendo permisos, multi-empresa y asignación de menú de opciones.
 **Cambios**:
-- Creación de app `authentication` con rutas `/api/auth/` (`login`, `register`, `verify-cedula`, `verify-email`)
-- Refactorización de app `users` con rutas `/api/users/` para CRUD y borrado lógico
-- Generación y validación de tokens JWT manuales
-- Protección de endpoints con `IsAuthenticated`
+- Creación de app `authentication` con rutas `/api/auth/` (`login`, `registerAccount`, `verifyCedula`, `verifyEmail`).
+- Refactorización de apps `users`, `gestionEmpresas` y `menuOpciones` para un CRUD integral con borrado lógico estricto.
+- Soporte Multi-Tenant: Las Instancias soportan múltiples empresas, con roles encapsulados e independientes.
+- Autenticación Segura: Generación y validación de tokens JWT nativos protegiendo los endpoints con `IsAuthenticated`.
 
 ### Fase 7️⃣: Configuración CORS (Semana 4-5)
 **Status**: ⏳ Pendiente  

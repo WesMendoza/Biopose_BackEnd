@@ -56,25 +56,24 @@ Los documentos obsoletos se trasladan a `Doc/archived/` para evitar mezclar refe
 
 **Objetivo**: Crear una capa de servicios que encapsule la lógica de detección sin depender de Flask.
 
-**Estado**: ✅ Completada
+**Estado**: ✅ Completada y Saneada (Arquitectura Limpia)
 
-**Tareas**:
-1. Crear módulo `services/pose_detection.py` que importe `PoseModule.py` del Tesis
-2. Crear módulo `services/behavior_detection.py` que importe `BehaviorDetector.py`
-3. Crear módulo `services/behavior_3d_detection.py` que importe `BehaviorDetector3d.py`
-4. Crear utilidades de procesamiento de video en `services/video_processor.py`
-5. Implementar caché local para modelos (YOLO, LSTM)
-6. Validar que los servicios funcionen independientemente de Flask/Django
+**Tareas Realizadas**:
+1. Crear módulos de integración nativos `services/pose_detection.py` (ultralytics YOLO) y `services/behavior_detection.py` (LSTM/PyTorch).
+2. Crear utilidades de procesamiento de video en `services/video_processor.py`
+3. Implementar caché local para abstractos (YOLO, LSTM) mapeado por `config_loader.py`.
+4. Validar que los servicios funcionen independientemente de Flask/Django y de conexiones a base de datos manuales.
+5. **Limpieza radical**: Eliminación y erradicación de código del Tesis original, librerías muertas, inyecciones SQL nativas y middlewares de autenticación rotos alojados erróneamente en `resources` y `models`.
 
-**Archivos a crear**:
+**Archivos resultantes**:
 - `backend/services/pose_detection.py`
 - `backend/services/behavior_detection.py`
 - `backend/services/video_processor.py`
 - `backend/services/config_loader.py` (para parámetros del sistema)
+- `backend/test_services.py` (Testing en camelCase validando arquitectura)
 
 **Criterio de éxito**:
-- Los servicios pueden ejecutarse sin dependencias de Flask
-- Se puede importar e instanciar `PoseModule` y ejecutar inferencia en una imagen/video
+- Los servicios pueden ejecutarse sin dependencias de Flask, ni de Django ORM u otros middlewares. Son agnósticos.
 
 **Cierre de fase**: ver [backend/FASE_1_COMPLETADA.md](../backend/FASE_1_COMPLETADA.md)
 
@@ -280,28 +279,28 @@ backend/media/
 
 ---
 
-### **Fase 6: Migración de Autenticación y Usuarios (Semana 4)**
+### **Fase 6: Migración de Autenticación, Usuarios y Multi-tenant (Semana 4)**
 
-**Objetivo**: Migrar sistema de login/permisos del Flask al Django y separar lógicamente la autenticación de la administración de usuarios.
+**Objetivo**: Migrar sistema de login/permisos del Flask al Django, estableciendo arquitectura multi-tenant (Empresas/Roles dinámicos) y asignaciones estrictas de opciones de menú.
 
-**Estado**: ✅ Refactorizada y en pruebas
+**Estado**: ✅ Completada
 
 **Tareas Completadas**:
 1. Creación de la app `apps.authentication`:
    - Endpoint de login: `POST /api/auth/login/` (Valida usuario y retorna JWT)
-   - Endpoint de registro: `POST /api/auth/register/` (Crea usuario con contraseña encriptada)
-   - Endpoints de validación: `POST /api/auth/verify-email/` y `POST /api/auth/verify-cedula/`
+   - Endpoint de registro: `POST /api/auth/registerAccount/` (Crea usuario con contraseña encriptada)
+   - Endpoints de validación: `POST /api/auth/verifyEmail/` y `POST /api/auth/verifyCedula/`
    - Implementación de `CustomJWTAuthentication` y utilidades de hashing y JWT nativo.
-2. Refactorización de la app `apps.users`:
-   - Mantenimiento estricto del CRUD RESTful para entidades (`Empresa`, `Users`, `Rol`, `Menuoption`).
-   - Endpoint: `GET /api/users/cedula/{cedula}/`
-   - Borrado lógico implementado en la acción `DELETE /api/users/{id}/`.
+2. Refactorización Integral (`apps.users`, `apps.gestionEmpresas`, `apps.menuOpciones`):
+   - Mantenimiento estricto del CRUD RESTful con Notación Estándar.
+   - Restricciones de permisos: Administradores globales vs Administradores de empresa.
+   - Borrado lógico transversal (`estado='I'` o `estado='N'`) implementado.
 3. Protección global de endpoints usando el decorador de permisos `IsAuthenticated` (drf).
 
 **Criterios de éxito alcanzados**:
 - Login devuelve token JWT válido.
-- Endpoints de infraestructura protegidos y rechazan sin token válido.
-- Separación de responsabilidad (Auth vs CRUD usuarios) implementada.
+- Endpoints de infraestructura protegidos y con lógica multi-empresa probada y operativa.
+- Roles de usuario ahora dependen de las asignaciones de cada empresa y menús correctamente restringidos.
 
 ---
 
