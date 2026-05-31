@@ -35,27 +35,28 @@
   - Endpoints consolidados listados (9 totales)
   - Mejoras arquitectónicas documentadas
 
-### 2. Código Python Fase 3 Creado ✅
+### 2. Código Python Fase 3 Creado (Refactorización Modular) ✅
 
-#### **backend/apps/analysis/serializers.py** (400+ líneas)
-```
-✅ Base de serializers creada para imagen, video, detecciones y frames
-✅ Estructuras de respuesta definidas para los endpoints de Fase 3
-✅ Serializers de soporte para errores, SSE y persistencia
-```
+Se implementó la nueva estructura modular dentro de `backend/apps/analysis/api/` en reemplazo del antiguo monolito.
 
-#### **backend/apps/analysis/views.py** (550+ líneas)
-```
-✅ ImageAnalysisViewSet, VideoAnalysisViewSet y FrameGenerationViewSet creados
-✅ Rutas y acciones base definidas para upload, process, stream, results, download y generate-from-video
-✅ La lógica de IA y la persistencia fina siguen pendientes de integración
-```
+#### **Módulo Media (`api/media/`)**
+✅ `serializers.py`: `ImageUploadSerializer`, `VideoUploadSerializer`
+✅ `views.py`: `ImageUploadView`, `VideoUploadView`
+✅ `urls.py`: Rutas de subida y redimensionado
 
-#### **backend/apps/analysis/urls.py** (actualizado)
-```
-✅ DefaultRouter con 3 ViewSets registrados
-✅ Rutas automáticas para todos los endpoints de Fase 3
-```
+#### **Módulo Pose (`api/pose/`)**
+✅ `serializers.py`: `KeypointSerializer`, `PersonPoseSerializer`, etc.
+✅ `views.py`: `PoseDetectionImageView` (procesamiento YOLO)
+✅ `urls.py`: Rutas de detección de keypoints
+
+#### **Módulo Behavior (`api/behavior/`)**
+✅ `serializers.py`: `DetectionEventSerializer`, `AnalysisReportSerializer`, `VideoProcessRequestSerializer`
+✅ `views.py`: `VideoProcessView`, `VideoResultsView` (inicio de procesamiento LSTM)
+✅ `urls.py`: Rutas de procesamiento y obtención de resultados
+
+#### **Router Principal (`api/router.py`)**
+✅ Archivo `router.py` enruta tráfico hacia `media/`, `pose/` y `behavior/`.
+
 
 ### 3. Arquitectura REST Implementada ✅
 
