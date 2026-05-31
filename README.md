@@ -285,12 +285,14 @@ Biopose_BackEnd/
 │   │   │   └── utils.py          # JWT generator y hash_password
 │   │   ├── analysis/
 │   │   │   ├── models.py         # VideoUpload, DetectionEvent, etc (Fase 2)
-│   │   │   ├── views.py          # Endpoints de análisis (Fase 3)
-│   │   │   ├── serializers.py    # Serialización de análisis (Fase 3)
+│   │   │   ├── api/              # API Modular (Fase 3)
+│   │   │   │   ├── router.py     # Enrutador principal
+│   │   │   │   ├── media/        # Uploads de imagen/video
+│   │   │   │   ├── pose/         # Keypoints YOLO
+│   │   │   │   └── behavior/     # Comportamiento LSTM
 │   │   │   ├── tasks.py          # Tareas Celery (Fase 4)
 │   │   │   ├── consumers.py      # WebSocket consumers (Fase 5)
 │   │   │   ├── routing.py        # Rutas WebSocket (Fase 5)
-│   │   │   ├── urls.py
 │   │   │   └── tests.py
 │   ├── services/                 # Capa de servicios de IA (Fase 1)
 │   │   ├── __init__.py

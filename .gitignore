@@ -16,6 +16,8 @@ static/videos/results/
 #Tesis carpeta de referencia a la version V1 del proyecto 
 Tesis/
 [Tesis]/
+.antigravitycli/
+[.antigravitycli]/
 
 # Modelos
 *.pt
