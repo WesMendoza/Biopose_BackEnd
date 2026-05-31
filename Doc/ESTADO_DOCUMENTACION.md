@@ -2,9 +2,9 @@
 
 ## Fases completadas
 
-- Fase 1: servicios de IA preparados y validados.
-- Fase 2: modelos Django y script SQL versionados y registrados.
-- Fase 3: endpoints REST implementados en backend y validados con `manage.py check`.
+- Fase 1: Servicios de IA preparados, validados y saneados (Arquitectura Limpia). Código legacy/basura del monolito eliminado. Los módulos son independientes y no tienen dependencias tóxicas.
+- Fase 2: Modelos Django y script SQL versionados y registrados.
+- Fase 3: Endpoints REST implementados en backend y validados con `manage.py check`.
 - Fase 6: Autenticación refactorizada, soporte multi-tenant (Empresas, Roles dinámicos por empresa) y asignación estricta de opciones de menú. Pruebas de API y ajustes de seguridad completados exitosamente.
 
 ## Documentos activos
