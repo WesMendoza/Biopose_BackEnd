@@ -52,6 +52,25 @@ class PoseDetectionService:
         """
         results = self.model(frame, verbose=False)
         return self._parse_results(results)
+
+    def detect_and_draw_pose_frame(self, frame):
+        """
+        Detecta pose en un frame y dibuja los keypoints.
+        
+        Args:
+            frame: Frame de OpenCV (numpy array)
+            
+        Returns:
+            tuple: (dict con resultados, numpy array con imagen anotada)
+        """
+        results = self.model(frame, verbose=False)
+        parsed = self._parse_results(results)
+        
+        annotated_frame = frame
+        if results and len(results) > 0:
+            annotated_frame = results[0].plot()
+            
+        return parsed, annotated_frame
     
     def detect_pose_with_tracking(self, frame, persist=True):
         """

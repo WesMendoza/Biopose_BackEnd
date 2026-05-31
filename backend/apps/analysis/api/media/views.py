@@ -12,7 +12,7 @@ from apps.analysis.models import VideoUpload
 
 class ImageUploadView(APIView):
     """
-    POST /api/analysis/images/upload/
+    POST /api/analysis/media/images/upload/
     Sube y prepara una imagen para ser posteriormente procesada por YOLO.
     """
     parser_classes = (MultiPartParser, FormParser)
@@ -52,7 +52,7 @@ class ImageUploadView(APIView):
 
 class VideoUploadView(APIView):
     """
-    POST /api/analysis/videos/upload/
+    POST /api/analysis/media/videos/upload/
     Sube un video en bruto y deja su registro inicial en BD (estado PENDING).
     """
     parser_classes = (MultiPartParser, FormParser)

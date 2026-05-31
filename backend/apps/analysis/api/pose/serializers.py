@@ -35,4 +35,5 @@ class PoseDetectionResponseSerializer(serializers.Serializer):
     model_used = serializers.CharField()
     position = serializers.CharField(help_text="Clasificación global de la pose en base al aspect ratio (ej: horizontal, cuadrada, vertical)")
     persons_detected = serializers.IntegerField()
+    processed_image_path = serializers.CharField(required=False, help_text="Ruta de la imagen con los keypoints dibujados")
     persons = PersonPoseSerializer(many=True)

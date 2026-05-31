@@ -46,9 +46,18 @@ class PoseDetectionImageView(APIView):
 
         # 3. Mandar a inferencia vía capa de servicios IA (Fase 1)
         try:
-            # Instanciamos el servicio (esto cargará 'yolov8s-pose.pt' o el configurado).
             pose_service = PoseDetectionService()
-            results_ia = pose_service.detect_pose_frame(cv_image)
+            results_ia, annotated_frame = pose_service.detect_and_draw_pose_frame(cv_image)
+            
+            # Guardar la imagen procesada
+            import uuid
+            processed_dir = os.path.join(settings.MEDIA_ROOT, 'images', 'processed')
+            os.makedirs(processed_dir, exist_ok=True)
+            safe_filename = f"pose_{uuid.uuid4().hex[:8]}.jpg"
+            processed_path = os.path.join(processed_dir, safe_filename)
+            cv2.imwrite(processed_path, annotated_frame)
+            relative_path = f"images/processed/{safe_filename}"
+            
         except Exception as e:
             return Response({
                 "error": "AI Processing Error",
@@ -56,11 +65,9 @@ class PoseDetectionImageView(APIView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         # 4. Validar formato de salida IA e inyectarlos para respuesta
-        # 'results_ia' devuelve {'keypoints': [{person_id, keypoints}], 'confidences': []}
         persons_formatted = []
         for p in results_ia.get('keypoints', []):
             person_coords = p.get('keypoints', [])
-            # Formateamos los 17 puntos como COCO (esto asume que YOLO extrajo 17 tuplas X,Y)
             formatted_kps = [
                 {"id": i, "name": f"kp_{i}", "x": kp[0], "y": kp[1], "confidence": 1.0}
                 for i, kp in enumerate(person_coords)
@@ -68,19 +75,19 @@ class PoseDetectionImageView(APIView):
             
             persons_formatted.append({
                 "person_id": p.get('person_id', 0),
-                "bbox": {"x1": 0, "y1": 0, "x2": 0, "y2": 0}, # Bbox base por fallo YOLO legacy track
+                "bbox": {"x1": 0, "y1": 0, "x2": 0, "y2": 0}, 
                 "keypoints": formatted_kps
             })
 
         response_data = {
             "success": True,
             "model_used": "yolov8s-pose",
-            "position": "unknown",  # A calcular lógicamente en post-procesos
+            "position": "unknown", 
             "persons_detected": len(persons_formatted),
+            "processed_image_path": relative_path,
             "persons": persons_formatted
         }
 
-        # Pasarlo por el serializer simplemente para garantizar compatibilidad OpenAPI/Tipado y filtrar
         out_serializer = PoseDetectionResponseSerializer(data=response_data)
         out_serializer.is_valid(raise_exception=True)
         
