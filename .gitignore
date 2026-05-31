@@ -6,12 +6,22 @@ venv/
 __pycache__/
 *.pyc
 
+#.vscode/
+*.vscode/
+
 # Videos
 static/videos/uploads/
 static/videos/results/
+
+#Tesis carpeta de referencia a la version V1 del proyecto 
+Tesis/
+[Tesis]/
 
 # Modelos
 *.pt
 *.pth
 *.webm
 *.mp4
+
+# Logs
+logs/
