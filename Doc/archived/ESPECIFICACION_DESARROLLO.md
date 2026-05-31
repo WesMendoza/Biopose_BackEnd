@@ -42,26 +42,21 @@ Los nombres de carpetas deben ser consistentes, sin variaciones innecesarias, y 
 
 ## Manejo de carpetas y nombres
 
-Se debe aplicar un control estricto sobre los nombres de carpetas, archivos y estructuras de sistema (Base de Datos).
+Se debe aplicar un control estricto sobre los nombres de carpetas, archivos y estructuras de sistema (Base de Datos y Código).
 
 - Evitar nombres ambiguos, abreviaturas poco claras o duplicadas.
 - Usar nombres descriptivos que reflejen la funcion del contenido.
 - No mezclar archivos de desarrollo con archivos de ejecucion.
 - No guardar recursos temporales dentro de carpetas que forman parte del codigo productivo.
 
-**Convenciones de Base de Datos y Modelos:**
-- Usar formato **camelCase** tanto para los nombres de las Tablas (p. ej., `empresaUsuarioRol`, `menuOption`), como para nombres de sus columnas (p. ej., `codigoEmpresa`, `nombreOption`, `idUsuario`).
-- En el ORM de Django (`models.py`), replicar exactamente el standard **camelCase** para sus variables. En aquellas columnas que formen parte de una base *legacy*, forzar su emparejamiento con parámetros como `db_column='codigoEmpresa'` dentro de los *Field properties*.
+**Convenciones de Base de Datos y Código (Estándar camelCase):**
+- Por definición del proyecto, se utilizará **camelCase** como estándar universal transversal.
+- Las tablas en la base de datos (ej. `empresaUsuarioRol`), sus columnas (`codigoEmpresa`, `idUsuario`), y las respuestas JSON de la API deben ir en `camelCase`.
+- **En el ORM de Django (`models.py`):** Se debe romper la convención PEP 8 de Python y declarar todas las propiedades, variables y métodos de los modelos usando estrictamente `camelCase` (ej. `nombreEmpresa = models.CharField(...)`). Esto garantiza consistencia visual y reduce la fricción mental entre la tabla física, el modelo en backend y la interfaz frontend.
 
-Ejemplos de nombres correctos en archivos y carpetas:
+## Gestión y Scripts de Base de Datos (Enfoque Manual Estricto)
 
-- `database_scripts`
-- `migration_scripts`
-- `seed_data`
-- `training_videos`
-- `generated_reports`
-
-## Scripts de base de datos
+El proyecto opera bajo un modelo **Database-First**. El control de la estructura de datos es explícito, manual y desvinculado del ORM.
 
 Todos los scripts de creacion, actualizacion y mantenimiento de base de datos deben identificarse, versionarse y almacenarse en una carpeta especifica.
 
@@ -76,13 +71,16 @@ Reglas para estos scripts:
 
 - Cada script debe tener un nombre secuencial y descriptivo.
 - Debe quedar claro si crea, modifica o corrige estructura.
-- **CONTROL MANUAL (NO AUTOMATICO)**: No se deben ejecutar scripts sin validacion previa y ejecucion manual explícita.
-- Flujo de cambios en BD:
-  1. Diseñar cambio y crear script SQL en `scripts/db/update/` con nombre secuencial (e.g., `002_fase3_endpoints_tables.sql`).
-  2. **Validar**: Revisar el script manualmente en entorno dev/test, comprobar sintaxis y dependencias.
-  3. **Documentar**: Actualizar `scripts/db/create/Esquema BD.sql` reflejando el nuevo estado del schema (tabla, columnas, FK, índices).
-  4. **Ejecutar**: Correr el script en PostgreSQL (esquema Dev) de forma manual en el cliente psql o herramienta de BD.
-  5. **Registrar**: Documentar en el archivo de control (FASE_X_COMPLETADA.md) qué script se ejecutó, cuándo y resultado.
+**CONTROL MANUAL (NO AUTOMATICO):**
+- **Queda estrictamente prohibido el uso de los comandos nativos de Django para migraciones** (`python manage.py makemigrations` o `python manage.py migrate` para el esquema de negocio).
+- Los modelos de Django (`models.py`) actuarán únicamente como una capa de mapeo (espejo) de una base de datos ya existente y administrada de forma externa.
+
+**Flujo de cambios en BD:**
+1. **Diseñar:** Crear el script SQL DDL (Create/Alter/Drop) en `scripts/db/update/` con nombre secuencial (ej., `002_fase3_endpoints_tables.sql`).
+2. **Validar:** Revisar el script manualmente en un entorno dev/test para comprobar sintaxis, relaciones y dependencias.
+3. **Ejecutar:** Correr el script en PostgreSQL de forma manual utilizando un cliente como `psql`, DBeaver o pgAdmin.
+4. **Sincronizar Código:** Actualizar manualmente los archivos `models.py` para que reflejen exactamente los cambios realizados en la base de datos.
+5. **Documentar:** Actualizar `scripts/db/create/Esquema BD.sql` reflejando el nuevo estado del esquema y registrar la ejecución en el archivo `FASE_X_COMPLETADA.md`.
 - Debe existir trazabilidad de que script se ejecuto, en que orden, fecha y resultado en la documentacion de fase correspondiente.
 
 ## Auditoría

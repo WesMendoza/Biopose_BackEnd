@@ -16,6 +16,7 @@ class MenuOpcionViewSet(BaseStandardViewSet):
     """
     serializer_class = MenuOpcionSerializer
     permission_classes = [IsAuthenticated]
+    http_method_names = ['get']
 
     def get_queryset(self):
         """
@@ -60,54 +61,6 @@ class MenuOpcionViewSet(BaseStandardViewSet):
             "detalle": detalle
         }, status=status.HTTP_200_OK)
 
-    def _es_administrador_global(self):
-        # Permite crear opciones genéricas si el usuario es Administrador en AL MENOS una empresa.
-        # Alternativamente, podría requerir is_staff.
-        return EmpresaUsuarioRol.objects.filter(
-            idUsuario=self.request.user, idRol__nombreRol='Administrador', estado='A'
-        ).exists()
-
-    def create(self, request, *args, **kwargs):
-        """
-        [POST] /api/menuOpciones/opciones/
-        Crear nueva opción genérica de menú.
-        """
-        if not self._es_administrador_global():
-             return Response({
-                "codigo": status.HTTP_403_FORBIDDEN,
-                "mensaje": "Acceso restringido",
-                "detalle": "Sólo un Administrador puede crear opciones de menú genéricas."
-            }, status=status.HTTP_403_FORBIDDEN)
-            
-        return super().create(request, *args, **kwargs)
-
-    def update(self, request, *args, **kwargs):
-        if not self._es_administrador_global():
-             return Response({
-                "codigo": status.HTTP_403_FORBIDDEN,
-                "mensaje": "Acceso restringido",
-                "detalle": "No tiene permisos para editar esta opción de menú."
-            }, status=status.HTTP_403_FORBIDDEN)
-        return super().update(request, *args, **kwargs)
-
-    def destroy(self, request, *args, **kwargs):
-        if not self._es_administrador_global():
-             return Response({
-                "codigo": status.HTTP_403_FORBIDDEN,
-                "mensaje": "Acceso restringido",
-                "detalle": "No tiene permisos para eliminar esta opción de menú."
-            }, status=status.HTTP_403_FORBIDDEN)
-
-        opcion = self.get_object()
-        opcion.estado = 'I'
-        opcion.usuarioModificacion = str(getattr(request.user, 'idUsuario', 'Sistema'))
-        opcion.save()
-        return Response({
-            "codigo": status.HTTP_200_OK,
-            "mensaje": "Opción de menú inhabilitada exitosamente (estado = I).",
-            "detalle": None
-        }, status=status.HTTP_200_OK)
-
 
 class RolOptionViewSet(BaseStandardViewSet):
     """
@@ -115,6 +68,7 @@ class RolOptionViewSet(BaseStandardViewSet):
     """
     serializer_class = RolOptionSerializer
     permission_classes = [IsAuthenticated]
+    http_method_names = ['get', 'post']
 
     def get_queryset(self):
         """
@@ -232,6 +186,69 @@ class RolOptionViewSet(BaseStandardViewSet):
                 "omitidasPorDuplicidad": opciones_omitidas
             }
         }, status=status.HTTP_201_CREATED if opciones_creadas else status.HTTP_200_OK)
+
+    @action(detail=False, methods=['post'], url_path='desasignar')
+    def desasignar(self, request):
+        """
+        [POST] /api/menuOpciones/asignarRolOpcion/desasignar/
+        Desasigna (inhabilita) una opción de menú de un rol.
+        Payload esperado:
+        {
+            "idRol": 1,
+            "idOption": 2
+        }
+        Solo Administradores de la empresa del rol pueden ejecutar.
+        """
+        data = request.data
+        idRol = data.get('idRol')
+        idOption = data.get('idOption')
+
+        if not idRol or not idOption:
+            return Response({
+                "codigo": status.HTTP_400_BAD_REQUEST,
+                "mensaje": "idRol e idOption son requeridos",
+                "detalle": None
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        from apps.gestionEmpresas.models import Rol
+        try:
+            rol = Rol.objects.get(idRol=idRol)
+        except Rol.DoesNotExist:
+            return Response({
+                "codigo": status.HTTP_404_NOT_FOUND,
+                "mensaje": "Rol no encontrado",
+                "detalle": None
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        if not self._es_administrador(rol.idEmpresa_id):
+            return Response({
+                "codigo": status.HTTP_403_FORBIDDEN,
+                "mensaje": "Acceso restringido",
+                "detalle": "Sólo puede desasignar opciones de roles de empresas que administra."
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        usuario_actual = str(getattr(request.user, 'idUsuario', 'Sistema'))
+        relacion = RolOption.objects.filter(idRol=rol, idOption_id=idOption, estado='A').first()
+        if not relacion:
+            return Response({
+                "codigo": status.HTTP_404_NOT_FOUND,
+                "mensaje": "Relación Rol-Option activa no encontrada",
+                "detalle": None
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        relacion.estado = 'I'
+        relacion.usuarioModificacion = usuario_actual
+        relacion.save()
+
+        return Response({
+            "codigo": status.HTTP_200_OK,
+            "mensaje": "Opción desasignada del rol exitosamente (estado = I).",
+            "detalle": {
+                "idRolOption": relacion.idRolOption,
+                "idRol": idRol,
+                "idOption": idOption
+            }
+        }, status=status.HTTP_200_OK)
 
     def destroy(self, request, *args, **kwargs):
         """

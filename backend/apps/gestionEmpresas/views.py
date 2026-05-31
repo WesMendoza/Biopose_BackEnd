@@ -475,6 +475,12 @@ class EmpresaUsuarioRolViewSet(BaseStandardViewSet):
                 
         # Asegurarnos de que el idRol se mapee correctamente para el serializer
         if id_rol:
+            if not Rol.objects.filter(idRol=id_rol, estado='A').exists():
+                return Response({
+                    "codigo": status.HTTP_400_BAD_REQUEST,
+                    "mensaje": "El rol a asignar no existe o se encuentra inactivo.",
+                    "detalle": None
+                }, status=status.HTTP_400_BAD_REQUEST)
             data['idRol'] = id_rol
 
         # Lógica para evitar duplicados si el usuario ya se unió a la empresa usando "asignarse_por_codigo"
@@ -486,20 +492,27 @@ class EmpresaUsuarioRolViewSet(BaseStandardViewSet):
             ).first()
             
             if asignacion:
-                # Actualiza la asignación existente en lugar de crear otra nueva
-                serializer = self.get_serializer(asignacion, data=data, partial=True)
-                if serializer.is_valid():
-                    serializer.save()
+                if asignacion.idRol_id is not None:
+                    # Si ya existe una asignación activa y tiene rol, rechazamos la creación.
                     return Response({
-                        "codigo": status.HTTP_200_OK,
-                        "mensaje": "Rol asignado/actualizado exitosamente al usuario en la empresa.",
+                        "codigo": status.HTTP_400_BAD_REQUEST,
+                        "mensaje": "El usuario ya tiene un rol asignado en esta empresa.",
+                        "detalle": {
+                            "idEmpresaUsuarioRol": asignacion.idEmpresaUsuarioRol,
+                        }
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                else:
+                    # Si la asignación existe pero tiene el rol en NULL, le asignamos el nuevo rol
+                    asignacion.idRol_id = id_rol
+                    asignacion.usuarioModificacion = str(getattr(request.user, 'idUsuario', 'Sistema'))
+                    asignacion.save()
+                    
+                    serializer = self.get_serializer(asignacion)
+                    return Response({
+                        "codigo": status.HTTP_201_CREATED,
+                        "mensaje": "Rol asignado exitosamente al usuario (asignación previa actualizada).",
                         "detalle": serializer.data
-                    })
-                return Response({
-                    "codigo": status.HTTP_400_BAD_REQUEST,
-                    "mensaje": "Error de validación",
-                    "detalle": serializer.errors
-                }, status=status.HTTP_400_BAD_REQUEST)
+                    }, status=status.HTTP_201_CREATED)
 
         # Si no existe asignación previa (creación manual completa), ejecuta la normal
         serializer = self.get_serializer(data=data)
@@ -517,39 +530,133 @@ class EmpresaUsuarioRolViewSet(BaseStandardViewSet):
             "detalle": serializer.errors
         }, status=status.HTTP_400_BAD_REQUEST)
 
-    def update(self, request, *args, **kwargs):
+    @action(detail=False, methods=['put', 'patch'], url_path='reasignar')
+    def reasignar_por_payload(self, request):
         """
-        [PUT/PATCH] /api/gestionEmpresas/asignarUsuarioRol/{id}/
-        Editar asignación
+        [PUT/PATCH] /api/gestionEmpresas/asignarUsuarioRol/reasignar/
+        Reasigna un rol a un usuario usando payload { idUsuario, idRol }.
         """
-        asignacion = self.get_object()
-        if not self._es_administrador(asignacion.idEmpresa_id):
-             return Response({
-                "codigo": status.HTTP_403_FORBIDDEN,
-                "mensaje": "Acceso restringido",
-                "detalle": "No tiene permisos para modificar roles en esta empresa."
-            }, status=status.HTTP_403_FORBIDDEN)
-        return super().update(request, *args, **kwargs)
+        try:
+            data = request.data.copy()
+        except Exception:
+            data = request.data
 
-    def destroy(self, request, *args, **kwargs):
-        """
-        [DELETE] /api/gestionEmpresas/asignarUsuarioRol/{id}/
-        3. Eliminar lógicamente al usuario de la empresa (lo saca de la empresa).
-        """
-        instance = self.get_object()
-        
-        if not self._es_administrador(instance.idEmpresa_id):
+        id_usuario = data.get('idUsuario')
+        id_rol = data.get('idRol') or data.get('rolId')
+
+        if not id_usuario or not id_rol:
+            return Response({
+                "codigo": status.HTTP_400_BAD_REQUEST,
+                "mensaje": "Se requieren 'idUsuario' y 'idRol' en el payload.",
+                "detalle": None
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if not Rol.objects.filter(idRol=id_rol, estado='A').exists():
+            return Response({
+                "codigo": status.HTTP_400_BAD_REQUEST,
+                "mensaje": "El rol a asignar no existe o se encuentra inactivo.",
+                "detalle": None
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        asignacion = EmpresaUsuarioRol.objects.filter(idUsuario=id_usuario, estado='A').first()
+        if not asignacion:
+            return Response({
+                "codigo": status.HTTP_404_NOT_FOUND,
+                "mensaje": "No se encontró una asignación activa para el usuario. Use POST para crear una asignación.",
+                "detalle": None
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        if not self._es_administrador(asignacion.idEmpresa_id):
             return Response({
                 "codigo": status.HTTP_403_FORBIDDEN,
-                "mensaje": "Acceso restringido",
-                "detalle": "No tiene permisos para remover usuarios de esta empresa."
+                "mensaje": "Acceso restringido: solo Administradores pueden reasignar roles.",
+                "detalle": None
             }, status=status.HTTP_403_FORBIDDEN)
-            
-        instance.estado = 'I'
-        instance.usuarioModificacion = str(getattr(request.user, 'idUsuario', 'Sistema'))
-        instance.save()
+
+        if int(asignacion.idRol_id) == int(id_rol):
+            return Response({
+                "codigo": status.HTTP_200_OK,
+                "mensaje": "El usuario ya tiene el rol solicitado; no se realizaron cambios.",
+                "detalle": {"idEmpresaUsuarioRol": asignacion.idEmpresaUsuarioRol}
+            }, status=status.HTTP_200_OK)
+
+        asignacion.estado = 'I'
+        asignacion.usuarioModificacion = str(getattr(request.user, 'idUsuario', 'Sistema'))
+        asignacion.save()
+
+        user_identifier = str(getattr(request.user, 'idUsuario', 'Sistema'))
+        nueva = EmpresaUsuarioRol.objects.create(
+            idEmpresa=asignacion.idEmpresa,
+            idUsuario=asignacion.idUsuario,
+            idRol_id=id_rol,
+            estado='A',
+            usuarioCreacion=user_identifier,
+            usuarioModificacion=user_identifier
+        )
+
+        serializer = self.get_serializer(nueva)
+        return Response({
+            "codigo": status.HTTP_201_CREATED,
+            "mensaje": "Rol reasignado correctamente.",
+            "detalle": serializer.data
+        }, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['put'], url_path='eliminar')
+    def eliminar_por_usuario(self, request):
+        """
+        [PUT] /api/gestionEmpresas/asignarUsuarioRol/eliminar/
+        Desasigna el rol (establece `idRol = NULL`) de la(s) asignación(es) activa(s) de un `idUsuario`.
+        """
+        try:
+            data = request.data.copy()
+        except Exception:
+            data = request.data
+
+        id_usuario = data.get('idUsuario')
+        cedula = data.get('cedula')
+
+        if not id_usuario and not cedula:
+            return Response({
+                "codigo": status.HTTP_400_BAD_REQUEST,
+                "mensaje": "Se requiere 'idUsuario' o 'cedula' para eliminar asignaciones.",
+                "detalle": None
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if not id_usuario and cedula:
+            try:
+                from apps.users.models import Users
+                user_obj = Users.objects.get(cedula=cedula, estado='A')
+                id_usuario = user_obj.idUsuario
+            except Exception:
+                return Response({
+                    "codigo": status.HTTP_404_NOT_FOUND,
+                    "mensaje": "Usuario no encontrado con esa cédula.",
+                    "detalle": None
+                }, status=status.HTTP_404_NOT_FOUND)
+
+        asignaciones = EmpresaUsuarioRol.objects.filter(idUsuario=id_usuario, estado='A')
+        if not asignaciones.exists():
+            return Response({
+                "codigo": status.HTTP_404_NOT_FOUND,
+                "mensaje": "No se encontraron asignaciones activas para el usuario.",
+                "detalle": None
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        empresas_afectadas = set(asignaciones.values_list('idEmpresa_id', flat=True))
+        permitted = any(self._es_administrador(eid) for eid in empresas_afectadas)
+        if not permitted:
+            return Response({
+                "codigo": status.HTTP_403_FORBIDDEN,
+                "mensaje": "Acceso restringido: no eres Administrador de las empresas afectadas.",
+                "detalle": None
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        usuario_mod = str(getattr(request.user, 'idUsuario', 'Sistema'))
+        # En lugar de inhabilitar la asignación, dejamos el rol en NULL (desasignar rol)
+        updated = asignaciones.update(idRol=None, usuarioModificacion=usuario_mod)
+
         return Response({
             "codigo": status.HTTP_200_OK,
-            "mensaje": "Asignación de rol a empresa eliminada exitosamente (borrado lógico a 'I').",
-            "detalle": None
+            "mensaje": f"Se han desasignado el rol del usuario.",
+            "detalle": {"idUsuario": id_usuario}
         }, status=status.HTTP_200_OK)
