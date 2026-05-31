@@ -111,7 +111,7 @@ class UsersViewSet(viewsets.ModelViewSet):
                 "detalle": None
             }, status=status.HTTP_404_NOT_FOUND)
 
-    @action(detail=False, methods=['put', 'patch'], url_path='actualizar-por-cedula/(?P<cedula>[^/.]+)')
+    @action(detail=False, methods=['put', 'patch'], url_path='actualizarPorCedula/(?P<cedula>[^/.]+)')
     def update_by_cedula(self, request, cedula=None):
         """
         [PUT/PATCH] /users/actualizar-por-cedula/{cedula}/

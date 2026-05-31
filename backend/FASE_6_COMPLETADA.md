@@ -25,40 +25,51 @@ Migrar el sistema de login, permisos y estructura multi-inquilino (tenant) del l
 5. **Auditoría Estandarizada por ID de Usuario**:
    - En todo el sistema, los campos `usuarioCreacion` y `usuarioModificacion` han pasado a registrarse utilizando el identificador numérico único del usuario (`idUsuario`), sustituyendo aproximaciones pasadas (como registrar el correo electrónico). Si el proceso no dispone de contexto de usuario, se identifica como `'Sistema'`.
 
-## Endpoints Configurados para Uso
+## Endpoints Configurados para Uso (detalle por módulo)
 
-A continuación se listan los endpoints principales habilitados en esta fase:
+A continuación se listan los endpoints y métodos implementados en esta fase, agrupados por aplicación.
 
-### 1. Iniciar Sesión (Login)
-- **Ruta**: `POST /api/auth/login/`
-- **Permisos**: Público
+### Authentication (`apps/authentication`)
+- `POST /api/auth/login/` : Iniciar sesión (payload: `correo`, `password`) — retorna JWT.
+- `POST /api/auth/registerAccount/` : Registro de cuenta (crea `Users`, valida correo/cedula).
+- `POST /api/auth/verifyCedula/` : Verificar existencia de `cedula`.
+- `POST /api/auth/verifyEmail/` : Verificar existencia de `correo`.
 
-### 2. Gestión de Empresas y Miembros (Multi-empresa)
-- **Crear Empresa** `POST /api/gestionEmpresas/empresas/`: (Registra empresa e inviste al creador como Administrador base).
-- **Asignarse a una Empresa** `POST /api/gestionEmpresas/empresas/asignarEmpresa/`: (Usuario se ancla sin rol administrativo por default o como 'Invitado' si se inicializó).
-- **Listar/Editar Empresa** `/api/gestionEmpresas/empresas/...`: Limitado a usuarios que contengan un registro `EmpresaUsuarioRol` como Administrador vigente.
+### Users (`apps/users`)
+- `GET /api/users/` : Listar usuarios (filtros opcionales por `empresa_id` y `rol_id`).
+- `GET /api/users/{idUsuario}/` : Obtener usuario por `idUsuario`.
+- `GET /api/users/cedula/{cedula}/` : Obtener usuario por `cedula`.
+- `PUT/PATCH /api/users/actualizarPorCedula/{cedula}/` : Actualizar usuario por `cedula` (ruta en camelCase: `actualizarPorCedula`).
+- `DELETE /api/users/eliminar/{cedula}/` : Borrado lógico por `cedula` (estado → 'N').
 
-### 3. Gestión y Personalización de Roles
-- **Rutas CRUD Roles**: `/api/gestionEmpresas/roles/`
-- Exclusivo para miembros que sean Administradores en la empresa. Útil para delegar o segmentar responsabilidades (ej. Rol "Supervisor de Cámaras"). Solo se retornan y modifican los de su propia empresa base. Permite borrado lógico ('A' activo, 'I' inactivo).
+### GestionEmpresas (`apps/gestionEmpresas`)
+Empresa
+- `GET /api/gestionEmpresas/empresas/` : Listar empresas activas.
+- `POST /api/gestionEmpresas/empresas/` : Crear empresa — el creador se convierte en `Administrador` y se crean roles por defecto (`Administrador`, `Invitado`).
+- `PUT/PATCH /api/gestionEmpresas/empresas/{codigoEmpresa}/` : Editar empresa (solo Administradores de la empresa).
+- `POST /api/gestionEmpresas/empresas/asignarEmpresa/` : Asignarse a una empresa por `codigoEmpresa` + `cedula` (usa rol `Invitado` por defecto).
 
-### 4. Asignación y Reasignación de Roles a Usuarios
-- **Rutas CRUD Asignar Roles**: `POST /api/gestionEmpresas/asignarUsuarioRol/` (O `PUT/DELETE` mediante `/asignarUsuarioRol/{id}/`)
-- **Payload Permisible (Flexible)**:
-```json
-{
-    "cedula": "0987654321",
-    "idRol": 7
-}
-```
-*(No es necesario enviar `idEmpresa`; el backend lo auto-detecta basándose en la sesión del Administrador. Además, acepta `cedula` en lugar del ID numérico de usuario, e `idRol` o `rolId` indistintamente).*
-- Protegido para uso exclusivo de **Administradores**. Permite actualizarle el rol a los usuarios preexistentes en la empresa (ej. promover de "Invitado" a otro rol customizado) y también eliminar su permanencia de la empresa (borrado lógico de la asociación `EmpresaUsuarioRol`).
+Roles
+- `GET /api/gestionEmpresas/roles/` : Listar roles de la empresa del administrador autenticado.
+- `POST /api/gestionEmpresas/roles/` : Crear rol (solo Administradores de la empresa).
+- `PUT/PATCH /api/gestionEmpresas/roles/{id}/` : Editar rol (solo Administradores).
+- `DELETE /api/gestionEmpresas/roles/{id}/` : Inhabilitar rol (estado = 'I').
 
-### 5. Opciones de Menú por Roles (Menú Dinámico)
-- **Rutas CRUD Opciones de Menú**: `/api/menuOpciones/opciones/`
-- Permite la creación y gestión de opciones de menú (`menuOption`) que definen las rutas de la interfaz, su estado y a qué empresa pertenecen. Exclusivo para miembros que sean Administradores en la empresa.
-- **Rutas CRUD Rol-Opciones**: `/api/menuOpciones/asignarRolOpcion/`
-- Permite asignar (`rolOption`) las opciones de menú habilitadas a cada rol existente en la empresa. Con esto, el frontend puede mostrar u ocultar secciones dinámicamente según el rol del usuario autenticado. Exclusivo para Administradores.
+EmpresaUsuarioRol (asignaciones)
+- `POST /api/gestionEmpresas/asignarUsuarioRol/` : Asignar rol a usuario. Payload preferido: `{ "idUsuario": <int>, "idRol": <int> }`. También se acepta `{ "cedula": "...", "idRol": <int> }` o `rolId` como alias. Solo Administradores de la empresa pueden ejecutar.
+- Al crear, si el usuario ya tiene una asignación activa en la empresa la petición será rechazada con un mensaje claro indicando el `idEmpresaUsuarioRol` existente y una sugerencia de uso.
+- `PUT/PATCH /api/gestionEmpresas/asignarUsuarioRol/reasignar/` : Reasignar rol a un usuario. Payload: `{ "idUsuario": <int>, "idRol": <int> }`. Si existe una asignación activa para el usuario en la empresa del administrador, se inhabilitará la anterior y se creará la nueva asignación (retorna `201 Created`). Si no existe asignación activa, la petición retornará `404` indicando usar `POST`.
+- `PUT /api/gestionEmpresas/asignarUsuarioRol/eliminar/` : Eliminar (quitar) rol al usuario por payload. Payload: `{ "idUsuario": <int> }` o `{ "cedula": "..." }`. Establece el rol en `NULL` de las asignaciones activas del usuario en las empresas donde el solicitante sea Administrador.
+
+
+### MenuOpciones (`apps/menuOpciones`)
+MenuOpcion
+- `GET /api/menuOpciones/opciones/` : Listar opciones de menú activas (`estado='A'`).
+- `GET /api/menuOpciones/opciones/usuario/{idUsuario}/` : Obtener opciones a las que un usuario tiene acceso (combina `EmpresaUsuarioRol` + `RolOption`).
+
+RolOption (asignación Rol↔Opción)
+- `POST /api/menuOpciones/asignarRolOpcion/` : Asignar una o varias opciones a un rol. Payload flexible: `{ "idRol": 1, "idOption": 2 }` o `{ "idRol":1, "idOptions": [2,3] }`. Reactiva relaciones inactivas si existen.
+- `POST /api/menuOpciones/asignarRolOpcion/desasignar/` : Desasigna (inhabilita) una opción de un rol cambiando su estado a 'I'. Payload: `{ "idRol": <int>, "idOption": <int> }`. Solo Administradores de la empresa del rol pueden ejecutar.
 
 ***
 
