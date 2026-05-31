@@ -280,28 +280,28 @@ backend/media/
 
 ---
 
-### **Fase 6: Migración de Autenticación y Usuarios (Semana 4)**
+### **Fase 6: Migración de Autenticación, Usuarios y Multi-tenant (Semana 4)**
 
-**Objetivo**: Migrar sistema de login/permisos del Flask al Django y separar lógicamente la autenticación de la administración de usuarios.
+**Objetivo**: Migrar sistema de login/permisos del Flask al Django, estableciendo arquitectura multi-tenant (Empresas/Roles dinámicos) y asignaciones estrictas de opciones de menú.
 
-**Estado**: ✅ Refactorizada y en pruebas
+**Estado**: ✅ Completada
 
 **Tareas Completadas**:
 1. Creación de la app `apps.authentication`:
    - Endpoint de login: `POST /api/auth/login/` (Valida usuario y retorna JWT)
-   - Endpoint de registro: `POST /api/auth/register/` (Crea usuario con contraseña encriptada)
-   - Endpoints de validación: `POST /api/auth/verify-email/` y `POST /api/auth/verify-cedula/`
+   - Endpoint de registro: `POST /api/auth/registerAccount/` (Crea usuario con contraseña encriptada)
+   - Endpoints de validación: `POST /api/auth/verifyEmail/` y `POST /api/auth/verifyCedula/`
    - Implementación de `CustomJWTAuthentication` y utilidades de hashing y JWT nativo.
-2. Refactorización de la app `apps.users`:
-   - Mantenimiento estricto del CRUD RESTful para entidades (`Empresa`, `Users`, `Rol`, `Menuoption`).
-   - Endpoint: `GET /api/users/cedula/{cedula}/`
-   - Borrado lógico implementado en la acción `DELETE /api/users/{id}/`.
+2. Refactorización Integral (`apps.users`, `apps.gestionEmpresas`, `apps.menuOpciones`):
+   - Mantenimiento estricto del CRUD RESTful con Notación Estándar.
+   - Restricciones de permisos: Administradores globales vs Administradores de empresa.
+   - Borrado lógico transversal (`estado='I'` o `estado='N'`) implementado.
 3. Protección global de endpoints usando el decorador de permisos `IsAuthenticated` (drf).
 
 **Criterios de éxito alcanzados**:
 - Login devuelve token JWT válido.
-- Endpoints de infraestructura protegidos y rechazan sin token válido.
-- Separación de responsabilidad (Auth vs CRUD usuarios) implementada.
+- Endpoints de infraestructura protegidos y con lógica multi-empresa probada y operativa.
+- Roles de usuario ahora dependen de las asignaciones de cada empresa y menús correctamente restringidos.
 
 ---
 

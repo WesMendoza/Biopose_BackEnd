@@ -5,7 +5,7 @@
 - Fase 1: servicios de IA preparados y validados.
 - Fase 2: modelos Django y script SQL versionados y registrados.
 - Fase 3: endpoints REST implementados en backend y validados con `manage.py check`.
-- Fase 6: Autenticación refactorizada (lógica separada en apps `auth` y `users`). JWT propio implementado, endpoints de login/registro operacionales, CRUD de usuarios con borrado lógico completado y protegido en `/api/users/`. Se entra en etapa de pruebas de API.
+- Fase 6: Autenticación refactorizada, soporte multi-tenant (Empresas, Roles dinámicos por empresa) y asignación estricta de opciones de menú. Pruebas de API y ajustes de seguridad completados exitosamente.
 
 ## Documentos activos
 
