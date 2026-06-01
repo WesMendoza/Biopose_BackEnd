@@ -49,12 +49,10 @@ Se implementó la nueva estructura modular dentro de `backend/apps/analysis/api/
 - `POST /api/analysis/media/videos/upload/`
 
 #### **Módulo Pose (`api/pose/`)**
-
 ✅ `serializers.py`: `KeypointSerializer`, `PersonPoseSerializer`, etc.
 ✅ `views.py`: `PoseDetectionImageView` (procesamiento YOLO + guardado de imagen anotada)
 ✅ `urls.py`: Rutas de detección de keypoints
-
-- `POST /api/analysis/pose/image/`
+   - `POST /api/analysis/pose/image/{image_id}/process/`
 
 #### **Módulo Behavior (`api/behavior/`)**
 

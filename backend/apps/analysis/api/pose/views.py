@@ -13,36 +13,40 @@ from apps.analysis.api.media.serializers import ImageUploadSerializer
 # Importar el servicio IA sanitizado de la Fase 1
 from services.pose_detection import PoseDetectionService
 
+from apps.analysis.models import ImageUpload
+
 class PoseDetectionImageView(APIView):
     """
-    POST /api/analysis/pose/image/
-    Sube una imagen, la procesa al instante pasándola por YOLO y devuelve los 17 keypoints.
-    No interactúa con Django ORM ni guarda metadatos por defecto.
+    POST /api/analysis/pose/image/<image_id>/process/
+    Procesa una imagen previamente subida usando YOLO, dibuja los keypoints y actualiza su registro en BD.
     """
-    parser_classes = (MultiPartParser, FormParser)
-
-    def post(self, request, *args, **kwargs):
-        # 1. Validar la imagen de entrada usando nuestro serializador nativo de media/
-        serializer = ImageUploadSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response({
-                "error": "Invalid upload parameters",
-                "message": serializer.errors
-            }, status=status.HTTP_400_BAD_REQUEST)
-            
-        image_file = request.FILES['image']
-        
-        # 2. Leer imagen a RAM (cv2) sin guardar forzosamente al disco
+    def post(self, request, image_id, *args, **kwargs):
         try:
-            image_bytes = np.frombuffer(image_file.read(), np.uint8)
-            cv_image = cv2.imdecode(image_bytes, cv2.IMREAD_COLOR)
-            if cv_image is None:
-                raise ValueError("No se pudo decodificar la imagen.")
-        except Exception as e:
+            image_record = ImageUpload.objects.get(pk=image_id)
+        except ImageUpload.DoesNotExist:
             return Response({
-                "error": "Corrupted image",
-                "message": f"Error procesando los bytes de la imagen: {str(e)}"
-            }, status=status.HTTP_400_BAD_REQUEST)
+                "error": "Image not found",
+                "message": f"La imagen con ID {image_id} no existe."
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        if image_record.estado == "PROCESSING":
+            return Response({"error": "Already processing"}, status=status.HTTP_400_BAD_REQUEST)
+
+        image_record.estado = "PROCESSING"
+        image_record.save()
+
+        # 2. Leer imagen del disco
+        image_path = os.path.join(settings.MEDIA_ROOT, image_record.rutaArchivoOriginal)
+        if not os.path.exists(image_path):
+            image_record.estado = "FAILED"
+            image_record.save()
+            return Response({"error": "File missing", "message": "El archivo físico no se encuentra."}, status=status.HTTP_404_NOT_FOUND)
+
+        cv_image = cv2.imread(image_path)
+        if cv_image is None:
+            image_record.estado = "FAILED"
+            image_record.save()
+            return Response({"error": "Corrupted image", "message": "No se pudo decodificar la imagen."}, status=status.HTTP_400_BAD_REQUEST)
 
         # 3. Mandar a inferencia vía capa de servicios IA (Fase 1)
         try:
@@ -58,7 +62,15 @@ class PoseDetectionImageView(APIView):
             cv2.imwrite(processed_path, annotated_frame)
             relative_path = f"images/processed/{safe_filename}"
             
+            from django.utils import timezone
+            image_record.rutaArchivoProcesado = relative_path
+            image_record.estado = "COMPLETED"
+            image_record.fechaProcesamiento = timezone.now()
+            image_record.save()
+            
         except Exception as e:
+            image_record.estado = "FAILED"
+            image_record.save()
             return Response({
                 "error": "AI Processing Error",
                 "message": f"Falló la inferencia de YOLO: {str(e)}"

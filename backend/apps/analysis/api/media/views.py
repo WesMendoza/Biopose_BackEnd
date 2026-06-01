@@ -43,11 +43,29 @@ class ImageUploadView(APIView):
         fs = FileSystemStorage(location=upload_dir)
         filename = fs.save(safe_filename, image_file)
         
-        return Response({
-            "message": "Imagen subida lista para procesar",
-            "filename": filename,
-            "path": f"images/uploads/{filename}"
-        }, status=status.HTTP_201_CREATED)
+        # Obtener idUsuario y idEmpresa desde el token/usuario autenticado
+        user = request.user
+        id_usuario = None
+        id_empresa = None
+        if user and user.is_authenticated:
+            id_usuario = user
+            from apps.gestionEmpresas.models import EmpresaUsuarioRol
+            asignacion = EmpresaUsuarioRol.objects.filter(idUsuario=user, estado='A').first()
+            if asignacion:
+                id_empresa = asignacion.idEmpresa_id
+
+        from apps.analysis.models import ImageUpload
+        image_upload = ImageUpload.objects.create(
+            idUsuario=id_usuario,
+            idEmpresa=id_empresa,
+            nombreOriginal=image_file.name,
+            rutaArchivoOriginal=f"images/uploads/{filename}",
+            tamanioBytes=image_file.size,
+            estado="PENDING"
+        )
+        
+        response_data = ImageUploadSerializer(image_upload).data
+        return Response(response_data, status=status.HTTP_201_CREATED)
 
 
 class VideoUploadView(APIView):
@@ -83,10 +101,21 @@ class VideoUploadView(APIView):
         fs = FileSystemStorage(location=upload_dir)
         filename = fs.save(safe_filename, video_file)
         
+        # Obtener idUsuario y idEmpresa desde el token/usuario autenticado
+        user = request.user
+        id_usuario = None
+        id_empresa = None
+        if user and user.is_authenticated:
+            id_usuario = user
+            from apps.gestionEmpresas.models import EmpresaUsuarioRol
+            asignacion = EmpresaUsuarioRol.objects.filter(idUsuario=user, estado='A').first()
+            if asignacion:
+                id_empresa = asignacion.idEmpresa_id
+
         # Guardado en base de datos.
-        # idUsuario y idEmpresa se inyectarán en la Fase 6 con request.user si es autenticado.
-        # Por ahora se permiten NULL según modelo de BD si es legacy.
         video_upload = VideoUpload.objects.create(
+            idUsuario=id_usuario,
+            idEmpresa=id_empresa,
             nombreOriginal=video_file.name,
             rutaArchivo=f"videos/uploads/{filename}",
             tamanioBytes=video_file.size,
