@@ -128,8 +128,8 @@ La migración se realiza en **7 fases independientes y validables**:
 - ✅ Guía rápida de implementación en [FASE_3_QUICK_START.md](Doc/FASE_3_QUICK_START.md)
 
 **Endpoints Consolidados (9 principales)**:
-- **Imágenes**: `POST /api/analysis/images/upload/`, `POST /api/analysis/images/resize/`, `POST /api/analysis/images/save/`
-- **Videos**: `POST /api/analysis/videos/upload/`, `POST /api/analysis/videos/{id}/process/`, `GET /api/analysis/videos/{id}/stream/`, `GET /api/analysis/videos/{id}/results/`, `GET /api/analysis/videos/{id}/download/`
+- **Imágenes**: `POST /api/analysis/media/images/upload/`, `POST /api/analysis/images/resize/`, `POST /api/analysis/images/save/`
+- **Videos**: `POST /api/analysis/media/videos/upload/`, `POST /api/analysis/videos/{id}/process/`, `GET /api/analysis/videos/{id}/stream/`, `GET /api/analysis/videos/{id}/results/`, `GET /api/analysis/videos/{id}/download/`
 - **Frames**: `POST /api/analysis/frames/generate-from-video/`
 
 **Mejoras respecto a Legacy**:

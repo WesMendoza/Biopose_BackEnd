@@ -1,21 +1,29 @@
 from rest_framework import serializers
-from apps.analysis.models import VideoUpload
+from apps.analysis.models import VideoUpload, ImageUpload
 
-class ImageUploadSerializer(serializers.Serializer):
+class ImageUploadSerializer(serializers.ModelSerializer):
     """
-    Serializer nativo para validar cargas de imágenes aisladas.
-    No está anclado a un modelo de BD porque las imágenes se procesan al vuelo.
+    Serializer nativo para validar cargas de imágenes aisladas, asociado al modelo ImageUpload.
     """
     image = serializers.ImageField(
+        write_only=True,
         required=True,
         error_messages={
             "required": "No image provided", 
             "invalid": "Debes enviar un archivo de imagen válido."
         }
     )
-    # Parametros opcionales para control de dimension (usado por YOLO)
-    height = serializers.IntegerField(required=False, min_value=1)
-    width = serializers.IntegerField(required=False, min_value=1)
+
+    class Meta:
+        model = ImageUpload
+        fields = [
+            'idImageUpload', 'nombreOriginal', 'rutaArchivoOriginal', 
+            'rutaArchivoProcesado', 'tamanioBytes', 'estado', 'fechaCarga', 'image'
+        ]
+        read_only_fields = [
+            'idImageUpload', 'nombreOriginal', 'rutaArchivoOriginal', 'rutaArchivoProcesado',
+            'tamanioBytes', 'estado', 'fechaCarga'
+        ]
 
 class VideoUploadSerializer(serializers.ModelSerializer):
     """
@@ -38,6 +46,6 @@ class VideoUploadSerializer(serializers.ModelSerializer):
             'tamanioBytes', 'estado', 'fechaCarga', 'video'
         ]
         read_only_fields = [
-            'idVideoUpload', 'rutaArchivo', 'tamanioBytes', 
+            'idVideoUpload', 'nombreOriginal', 'rutaArchivo', 'tamanioBytes', 
             'estado', 'fechaCarga'
         ]

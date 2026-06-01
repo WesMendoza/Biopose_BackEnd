@@ -2,7 +2,7 @@ from django.urls import path, include
 
 urlpatterns = [
     # Módulo de Manejo de Archivos/Media (Carga, renderización inicial)
-    path('', include('apps.analysis.api.media.urls')),
+    path('media/', include('apps.analysis.api.media.urls')),
     
     # -------------------------------------------------------------
     # Se descomentarán conforme avancemos en las iteraciones:
