@@ -185,6 +185,7 @@ Esto permite:
 - Documentar decisiones tecnicas importantes.
 - Separar logica de negocio, acceso a datos y presentacion.
 - Evitar dependencias innecesarias.
+- **Rendimiento Computacional de IA:** Todo servicio que procese flujos de video debe implementar obligatoriamente técnicas de optimización (Ej. Frame Skipping, Batch Inference, Redimensionado y Motion Gating) para evitar bloqueos del hilo principal y reducir el consumo de memoria.
 
 ## Versionamiento y seguimiento
 

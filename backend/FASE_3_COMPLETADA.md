@@ -1,11 +1,15 @@
-# FASE 3: Endpoints REST Básicos - Iteración 1 Completada ✅
+# FASE 3: Endpoints REST Básicos - Módulo de Carga e Inferencia de Imágenes Completado ✅
 
-**Estado**: ⏳ Estructura Base Implementada - Integración IA, persistencia y pruebas pendientes
+**Estado**: 🚀 Módulo de Imágenes 100% Funcional (Inferencia YOLOv8s-pose + Base de Datos + Multi-Tenant integrados)
 
-**Alcance real de esta iteración**: se creó la base documental y la estructura de ViewSets/serializers/routers, pero todavía no hay una implementación productiva completa de los endpoints.
+**Alcance real de esta iteración**:
+Se implementó y probó con total éxito el flujo completo de imágenes de la Fase 3:
+1. **Subida de Imágenes**: Endpoint `/api/analysis/media/images/upload/` que almacena la imagen física en disco y registra los metadatos en la tabla `"analysisImageUpload"` asociando automáticamente el usuario (`idUsuario`) y empresa (`idEmpresa`) del token JWT de la Fase 6.
+2. **Procesamiento de Pose (YOLO)**: Endpoint `/api/analysis/pose/image/<int:image_id>/process/` que toma la imagen subida en la base de datos, ejecuta la inferencia mediante el servicio de IA de la Fase 1 (`PoseDetectionService` basado en YOLOv8s-pose), guarda la imagen anotada con el esqueleto en disco, actualiza el registro a `COMPLETED` con la fecha y hora de procesamiento, y retorna los 17 keypoints anatómicos en formato COCO estándar.
+3. **Consistencia DDL/PostgreSQL**: Se estandarizó la base de datos a camelCase usando comillas dobles en SQL (`"analysisImageUpload"`, etc.) y se sincronizó el ORM de Django en `models.py` eliminando cualquier conflicto de nomenclatura.
 
 **Fecha de Inicio**: 2026-05-03
-**Fecha de Finalización de Iteración 1**: 2026-05-03
+**Fecha de Finalización de Iteración 1 y 2 (Imágenes)**: 2026-05-31
 
 ---
 

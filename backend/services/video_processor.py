@@ -61,7 +61,7 @@ def _first_person_keypoints(raw_pose_data):
     return keypoints
 
 
-def analyze_video_behavior(video_path, mode='operativo', dimension='2D', fps_skip=1, confidence_threshold=0.75):
+def analyze_video_behavior(video_path, mode='operativo', dimension='2D', fps_skip=5, confidence_threshold=0.75):
     start_time = time.time()
     capture = cv2.VideoCapture(video_path)
     if not capture.isOpened():
@@ -71,25 +71,48 @@ def analyze_video_behavior(video_path, mode='operativo', dimension='2D', fps_ski
     fps = float(capture.get(cv2.CAP_PROP_FPS) or 0)
     duration_seconds = float(total_frames / fps) if fps else 0.0
 
+    # 1. OPTIMIZACIÓN: Inicializar Motion Gating (Filtro de movimiento)
+    bg_subtractor = cv2.createBackgroundSubtractorMOG2(history=50, varThreshold=25, detectShadows=False)
+
     sampled_keypoints = []
     sampled_frames = []
-    frame_indices = range(0, total_frames if total_frames > 0 else 1, max(1, fps_skip))
+    
+    fps_skip = max(1, fps_skip)
+    frame_index = 0
 
-    for frame_index in frame_indices:
-        capture.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+    # 2. OPTIMIZACIÓN: Lectura secuencial en vez de saltos con capture.set()
+    while True:
         ok, frame = capture.read()
         if not ok:
+            break
+            
+        current_idx = frame_index
+        frame_index += 1
+
+        # 3. OPTIMIZACIÓN: Frame Skipping
+        if current_idx % fps_skip != 0:
             continue
 
-        raw_pose = get_pose_service().detect_pose_frame(frame)
+        # 4. OPTIMIZACIÓN: Downscaling a la resolución de YOLO (640x640)
+        frame_resized = cv2.resize(frame, (640, 640))
+        
+        # Aplicar el filtro de movimiento al frame pequeño
+        fg_mask = bg_subtractor.apply(frame_resized)
+        motion_level = cv2.countNonZero(fg_mask)
+        
+        # Si casi no hay movimiento (menos de 500 pixeles de 640x640), saltar a YOLO
+        if motion_level < 500:
+            continue
+
+        raw_pose = get_pose_service().detect_pose_frame(frame_resized)
         first_person = _first_person_keypoints(raw_pose)
         if len(first_person) < 17:
             continue
 
         sampled_frames.append({
-            'frame_index': frame_index,
-            'timestamp_sec': float(frame_index / fps) if fps else 0.0,
-            'frame': frame,
+            'frame_index': current_idx,
+            'timestamp_sec': float(current_idx / fps) if fps else 0.0,
+            'frame': frame_resized,
         })
         sampled_keypoints.append([[float(point[0]), float(point[1])] for point in first_person[:17]])
 

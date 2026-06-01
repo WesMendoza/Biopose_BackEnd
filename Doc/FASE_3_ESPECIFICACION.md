@@ -268,6 +268,13 @@ Response 404:
 - **analitico**: Bounding box + esqueleto de pose + etiqueta (balance)
 - **debug**: Debug completo con telemetría LSTM, detalle de ventanas, scores internos
 
+**Arquitectura de Optimización de Procesamiento (Behavior)**:
+Para evitar la saturación del servidor, el endpoint de procesamiento aplicará las siguientes reglas lógicas antes de iniciar el worker:
+1. **Frame Skipping (`fps_skip`)**: Si se pasa `fps_skip=5`, el backend solo procesará 1 de cada 5 frames (efectivamente procesando a ~6 FPS).
+2. **Motion Gating**: Uso de OpenCV `BackgroundSubtractor` para saltar la inferencia YOLO si no se detecta cambio de píxeles (nadie se mueve).
+3. **Batch Inference**: Agrupar los frames extraídos en *batches* (lotes) para aprovechar la paralelización de YOLO en vez de iterarlos de 1 en 1.
+4. **Buffer Deslizante LSTM**: El modelo LSTM acumulará los keypoints generados por YOLO en una ventana (ej. 30 frames). Si hay suficientes humanos detectados y movimiento, se dispara la inferencia del LSTM.
+
 ---
 
 #### **2.2.3 Stream de Progreso (Server-Sent Events)**

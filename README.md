@@ -33,8 +33,10 @@ Esta migración implementa una **Arquitectura Modular Distribuida con patrón de
 Antes de levantar el proyecto, asegurate de contar con:
 1. **Python 3.10+** instalado en tu maquina.
 2. **PostgreSQL** instalado y ejecutandose.
-3. **Redis** instalado (para Celery en Fase 4+).
+3. **Docker Desktop** (Altamente recomendado para levantar Redis de forma nativa en Windows) o Redis local instalado.
 4. El archivo `.env` configurado dentro de la carpeta `backend/`.
+
+Consulta la guía oficial en [Doc/GUIA_DESPLIEGUE_REDIS.md](Doc/GUIA_DESPLIEGUE_REDIS.md) para aprender a levantar el entorno de procesamiento asíncrono tanto en tu PC como en la Nube.
 
 ## 🏗️ Arquitectura del Sistema
 
@@ -120,12 +122,16 @@ La migración se realiza en **7 fases independientes y validables**:
 **Referencia de cierre**: [backend/FASE_2_COMPLETADA.md](backend/FASE_2_COMPLETADA.md)
 
 ### Fase 3️⃣: Endpoints REST Básicos (Semana 2)
-**Status**: ⏳ Análisis Completado - Implementación en Progreso  
+**Status**: 🚀 Módulo de Imágenes Completado y Funcional (Inferencia YOLOv8s-pose + Base de Datos + Multi-Tenant integrados)  
 **Objetivo**: Exponer servicios IA a través de REST API y cubrir flujos legacy
-**Análisis Realizado**: 
+**Avances y Análisis Realizados**: 
 - ✅ 37 endpoints legacy identificados y categorizados en [FASE_3_ESPECIFICACION.md](Doc/FASE_3_ESPECIFICACION.md)
 - ✅ Mapeo comparativo legacy→Django en [FASE_3_COMPARATIVA_LEGACY_VS_DJANGO.md](Doc/FASE_3_COMPARATIVA_LEGACY_VS_DJANGO.md)
 - ✅ Guía rápida de implementación en [FASE_3_QUICK_START.md](Doc/FASE_3_QUICK_START.md)
+- ✅ **Flujo de Imágenes 100% Completado**: 
+  - `POST /api/analysis/media/images/upload/` integrado con base de datos `"analysisImageUpload"` y campos multi-tenant (`idUsuario` e `idEmpresa`).
+  - `POST /api/analysis/pose/image/<int:image_id>/process/` integrado con `PoseDetectionService` (YOLOv8s-pose) para obtener los 17 keypoints y guardar la imagen anatómica en disco, registrando el estado `COMPLETED` en la base de datos.
+  - Sincronización del ORM y DDL de base de datos respetando estrictamente camelCase y comillas dobles en PostgreSQL.
 
 **Endpoints Consolidados (9 principales)**:
 - **Imágenes**: `POST /api/analysis/media/images/upload/`, `POST /api/analysis/images/resize/`, `POST /api/analysis/images/save/`
@@ -394,8 +400,8 @@ redis-server  # En Windows, instala desde: https://github.com/microsoftarchive/r
 | Estructura Django base | ✅ Listo | - |
 | Servicios de IA | ✅ Completado | 1 |
 | Modelos Django | ✅ Completado | 2 |
-| API REST | ⏳ En Progreso (Swagger OK) | 3 |
-| Celery + Redis | ⏳ Pendiente | 4 |
+| API REST | ✅ Completado | 3 |
+| Celery + Redis | ⏳ En Progreso | 4 |
 | WebSocket | ⏳ Pendiente | 5 |
 | Autenticación Auth/Users | ✅ Completado | 6 |
 | Configuración CORS | ⏳ Pendiente | 7 |
