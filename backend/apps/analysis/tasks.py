@@ -1,6 +1,17 @@
 from celery import shared_task
 from django.utils import timezone
 from .models import VideoUpload, AnalysisReport
+import os
+import json
+from django.conf import settings
+
+
+def _resolve_media_path(stored_path):
+    if not stored_path:
+        return stored_path
+    if os.path.isabs(stored_path):
+        return stored_path
+    return os.path.join(settings.MEDIA_ROOT, stored_path)
 
 @shared_task(bind=True)
 def process_video_task(self, video_id, mode='operativo', dimension='2D', fps_skip=5, confidence_threshold=0.75):
@@ -16,14 +27,28 @@ def process_video_task(self, video_id, mode='operativo', dimension='2D', fps_ski
         # Lógica pesada de procesamiento llamando a video_processor.py (optimizado)
         from services.video_processor import analyze_video_behavior
         
+        # Construir ruta absoluta para OpenCV
+        absolute_video_path = os.path.join(settings.MEDIA_ROOT, video_upload.rutaArchivo)
+
         # Invocación real del modelo
         resultado = analyze_video_behavior(
-            video_path=video_upload.rutaArchivo,
+            video_path=absolute_video_path,
             mode=mode,
             dimension=dimension,
             fps_skip=fps_skip,
             confidence_threshold=confidence_threshold
         )
+
+        # Crear directorio y persistir JSON de keypoints
+        report_dir = os.path.join(settings.MEDIA_ROOT, 'reports')
+        os.makedirs(report_dir, exist_ok=True)
+        json_filename = f'keypoints_video_{video_id}.json'
+        json_path = os.path.join(report_dir, json_filename)
+        with open(json_path, 'w') as f:
+            json.dump(resultado.get('person_keypoints', []), f)
+        
+        # Guardar ruta relativa al media root
+        ruta_json_relativa = f'reports/{json_filename}'
 
         # Crear y persistir el reporte (AnalysisReport)
         reporte = AnalysisReport.objects.create(
@@ -38,6 +63,7 @@ def process_video_task(self, video_id, mode='operativo', dimension='2D', fps_ski
             confianzaMaxima=resultado.get('summary', {}).get('max_confidence', 0.0),
             tiempoProcesamientoSegundos=resultado.get('processing_time_seconds', 0.0),
             estadisticas=resultado.get('summary', {}),
+            rutaJsonKeypoints=ruta_json_relativa,
             usuarioCreacion='Sistema'
         )
 

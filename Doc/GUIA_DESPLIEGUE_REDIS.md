@@ -27,13 +27,15 @@ docker run -d --name biopose-redis -p 6379:6379 redis:alpine
 - `redis:alpine`: Descarga una versión de Redis ultraligera.
 
 ### Paso 2: Arrancar Celery
-Abre **otra ventana de terminal**, activa tu entorno virtual y arranca el trabajador:
+Abre **otra ventana de terminal**, entra primero a `backend/`, activa tu entorno virtual y arranca el trabajador:
 ```powershell
 cd backend
 .\venv\Scripts\Activate.ps1
 celery -A core worker -l info --pool=solo
 ```
 *(Nota: En Windows, `--pool=solo` es obligatorio para que Celery funcione correctamente debido a cómo Windows maneja los procesos fork).*
+
+Si aparece `Unable to load celery application. The module core was not found`, significa que el comando se ejecutó desde la raíz del repositorio o desde un directorio que no contiene el paquete `core`. La corrección es volver a `backend/` y ejecutar el comando desde allí.
 
 ---
 

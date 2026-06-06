@@ -55,9 +55,14 @@ def _first_person_keypoints(raw_pose_data):
     confidence_values = confidences[0] if confidences else []
     keypoints = []
     for index, name in enumerate(COCO_KEYPOINT_NAMES):
-        point = first_person[index] if index < len(first_person) else [0.0, 0.0]
+        if index < len(first_person):
+            point = first_person[index]
+        else:
+            point = [0.0, 0.0]
         confidence = float(confidence_values[index]) if index < len(confidence_values) else 0.0
-        keypoints.append([float(point[0]), float(point[1]), confidence, name])
+        x_value = float(point[0]) if len(point) > 0 else 0.0
+        y_value = float(point[1]) if len(point) > 1 else 0.0
+        keypoints.append([x_value, y_value, confidence, name])
     return keypoints
 
 
@@ -122,6 +127,20 @@ def analyze_video_behavior(video_path, mode='operativo', dimension='2D', fps_ski
     person_keypoints = []
     if sampled_keypoints:
         sequence = np.array(sampled_keypoints, dtype=np.float32)
+        if sequence.ndim != 3 or sequence.shape[1] != 17:
+            return {
+                'detections': [],
+                'person_keypoints': [],
+                'total_frames': total_frames,
+                'duration_seconds': duration_seconds,
+                'processing_time_seconds': round(time.time() - start_time, 3),
+                'summary': {
+                    'detections_by_type': {},
+                    'average_confidence': 0.0,
+                    'max_confidence': 0.0,
+                    'error': 'Secuencia de keypoints inválida'
+                },
+            }
         if sequence.shape[0] < get_behavior_service().window_size:
             pad_count = get_behavior_service().window_size - sequence.shape[0]
             sequence = np.concatenate([sequence, np.repeat(sequence[-1][None, :, :], pad_count, axis=0)], axis=0)
@@ -149,22 +168,24 @@ def analyze_video_behavior(video_path, mode='operativo', dimension='2D', fps_ski
                 'frame_base64': '',
             })
 
-            keypoints_json = []
-            for index, point in enumerate(sampled_keypoints[-1]):
-                keypoints_json.append({
-                    'id': index,
-                    'name': COCO_KEYPOINT_NAMES[index],
-                    'x': point[0],
-                    'y': point[1],
-                    'z': 0.0,
-                    'confidence': point[2],
+            # Modificado: Se guardan TODOS los keypoints en lugar de solo el último
+            for sf, kp in zip(sampled_frames, sampled_keypoints):
+                keypoints_json = []
+                for index, point in enumerate(kp):
+                    keypoints_json.append({
+                        'id': index,
+                        'name': COCO_KEYPOINT_NAMES[index],
+                        'x': point[0],
+                        'y': point[1],
+                        'z': 0.0,
+                        'confidence': 1.0, # point solo tiene x e y
+                    })
+                person_keypoints.append({
+                    'person_id': 0,
+                    'frame_index': sf['frame_index'],
+                    'timestamp_sec': sf['timestamp_sec'],
+                    'keypoints_json': keypoints_json,
                 })
-
-            person_keypoints.append({
-                'person_id': 0,
-                'frame_index': sampled_frames[-1]['frame_index'],
-                'keypoints_json': keypoints_json,
-            })
 
     summary = {
         'detections_by_type': {},
