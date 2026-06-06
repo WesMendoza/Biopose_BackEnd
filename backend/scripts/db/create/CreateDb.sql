@@ -205,6 +205,7 @@ CREATE TABLE IF NOT EXISTS "analysisReport" (
   "tiempoProcesamientoSegundos" DOUBLE PRECISION NULL CHECK ("tiempoProcesamientoSegundos" IS NULL OR "tiempoProcesamientoSegundos" >= 0),
   estadisticas JSONB NULL,
   "resumenJson" JSONB NULL,
+  "rutaJsonKeypoints" VARCHAR(500) NULL,
   "generadoEn" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "actualizadoEn" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "usuarioCreacion" VARCHAR(100) NULL,

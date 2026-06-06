@@ -55,13 +55,18 @@ def _first_person_keypoints(raw_pose_data):
     confidence_values = confidences[0] if confidences else []
     keypoints = []
     for index, name in enumerate(COCO_KEYPOINT_NAMES):
-        point = first_person[index] if index < len(first_person) else [0.0, 0.0]
+        if index < len(first_person):
+            point = first_person[index]
+        else:
+            point = [0.0, 0.0]
         confidence = float(confidence_values[index]) if index < len(confidence_values) else 0.0
-        keypoints.append([float(point[0]), float(point[1]), confidence, name])
+        x_value = float(point[0]) if len(point) > 0 else 0.0
+        y_value = float(point[1]) if len(point) > 1 else 0.0
+        keypoints.append([x_value, y_value, confidence, name])
     return keypoints
 
 
-def analyze_video_behavior(video_path, mode='operativo', dimension='2D', fps_skip=1, confidence_threshold=0.75):
+def analyze_video_behavior(video_path, mode='operativo', dimension='2D', fps_skip=5, confidence_threshold=0.75):
     start_time = time.time()
     capture = cv2.VideoCapture(video_path)
     if not capture.isOpened():
@@ -71,25 +76,48 @@ def analyze_video_behavior(video_path, mode='operativo', dimension='2D', fps_ski
     fps = float(capture.get(cv2.CAP_PROP_FPS) or 0)
     duration_seconds = float(total_frames / fps) if fps else 0.0
 
+    # 1. OPTIMIZACIÓN: Inicializar Motion Gating (Filtro de movimiento)
+    bg_subtractor = cv2.createBackgroundSubtractorMOG2(history=50, varThreshold=25, detectShadows=False)
+
     sampled_keypoints = []
     sampled_frames = []
-    frame_indices = range(0, total_frames if total_frames > 0 else 1, max(1, fps_skip))
+    
+    fps_skip = max(1, fps_skip)
+    frame_index = 0
 
-    for frame_index in frame_indices:
-        capture.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+    # 2. OPTIMIZACIÓN: Lectura secuencial en vez de saltos con capture.set()
+    while True:
         ok, frame = capture.read()
         if not ok:
+            break
+            
+        current_idx = frame_index
+        frame_index += 1
+
+        # 3. OPTIMIZACIÓN: Frame Skipping
+        if current_idx % fps_skip != 0:
             continue
 
-        raw_pose = get_pose_service().detect_pose_frame(frame)
+        # 4. OPTIMIZACIÓN: Downscaling a la resolución de YOLO (640x640)
+        frame_resized = cv2.resize(frame, (640, 640))
+        
+        # Aplicar el filtro de movimiento al frame pequeño
+        fg_mask = bg_subtractor.apply(frame_resized)
+        motion_level = cv2.countNonZero(fg_mask)
+        
+        # Si casi no hay movimiento (menos de 500 pixeles de 640x640), saltar a YOLO
+        if motion_level < 500:
+            continue
+
+        raw_pose = get_pose_service().detect_pose_frame(frame_resized)
         first_person = _first_person_keypoints(raw_pose)
         if len(first_person) < 17:
             continue
 
         sampled_frames.append({
-            'frame_index': frame_index,
-            'timestamp_sec': float(frame_index / fps) if fps else 0.0,
-            'frame': frame,
+            'frame_index': current_idx,
+            'timestamp_sec': float(current_idx / fps) if fps else 0.0,
+            'frame': frame_resized,
         })
         sampled_keypoints.append([[float(point[0]), float(point[1])] for point in first_person[:17]])
 
@@ -99,6 +127,20 @@ def analyze_video_behavior(video_path, mode='operativo', dimension='2D', fps_ski
     person_keypoints = []
     if sampled_keypoints:
         sequence = np.array(sampled_keypoints, dtype=np.float32)
+        if sequence.ndim != 3 or sequence.shape[1] != 17:
+            return {
+                'detections': [],
+                'person_keypoints': [],
+                'total_frames': total_frames,
+                'duration_seconds': duration_seconds,
+                'processing_time_seconds': round(time.time() - start_time, 3),
+                'summary': {
+                    'detections_by_type': {},
+                    'average_confidence': 0.0,
+                    'max_confidence': 0.0,
+                    'error': 'Secuencia de keypoints inválida'
+                },
+            }
         if sequence.shape[0] < get_behavior_service().window_size:
             pad_count = get_behavior_service().window_size - sequence.shape[0]
             sequence = np.concatenate([sequence, np.repeat(sequence[-1][None, :, :], pad_count, axis=0)], axis=0)
@@ -126,22 +168,24 @@ def analyze_video_behavior(video_path, mode='operativo', dimension='2D', fps_ski
                 'frame_base64': '',
             })
 
-            keypoints_json = []
-            for index, point in enumerate(sampled_keypoints[-1]):
-                keypoints_json.append({
-                    'id': index,
-                    'name': COCO_KEYPOINT_NAMES[index],
-                    'x': point[0],
-                    'y': point[1],
-                    'z': 0.0,
-                    'confidence': point[2],
+            # Modificado: Se guardan TODOS los keypoints en lugar de solo el último
+            for sf, kp in zip(sampled_frames, sampled_keypoints):
+                keypoints_json = []
+                for index, point in enumerate(kp):
+                    keypoints_json.append({
+                        'id': index,
+                        'name': COCO_KEYPOINT_NAMES[index],
+                        'x': point[0],
+                        'y': point[1],
+                        'z': 0.0,
+                        'confidence': 1.0, # point solo tiene x e y
+                    })
+                person_keypoints.append({
+                    'person_id': 0,
+                    'frame_index': sf['frame_index'],
+                    'timestamp_sec': sf['timestamp_sec'],
+                    'keypoints_json': keypoints_json,
                 })
-
-            person_keypoints.append({
-                'person_id': 0,
-                'frame_index': sampled_frames[-1]['frame_index'],
-                'keypoints_json': keypoints_json,
-            })
 
     summary = {
         'detections_by_type': {},

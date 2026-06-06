@@ -11,7 +11,7 @@ urlpatterns = [
     path('pose/', include('apps.analysis.api.pose.urls')),
     
     # Módulo LSTM (Detección de comportamiento)
-    path('', include('apps.analysis.api.behavior.urls')),
+    path('videos/', include('apps.analysis.api.behavior.urls')),
     
     # Módulo Streaming (Websockets y monitoreo real-time)
     # path('', include('apps.analysis.api.live.urls')),

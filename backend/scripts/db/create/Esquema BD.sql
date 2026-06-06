@@ -139,6 +139,7 @@ TABLE analysis_report {
   tiempoProcesamientoSegundos float
   estadisticas json
   resumenJson json
+  rutaJsonKeypoints varchar
   generadoEn datetime
   actualizadoEn datetime
 }

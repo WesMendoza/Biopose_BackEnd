@@ -14,12 +14,14 @@ class ActionLSTM(nn.Module):
     """Modelo LSTM para clasificación de acciones."""
     def __init__(self, input_size=68, hidden_size=128, num_classes=3):
         super(ActionLSTM, self).__init__()
-        self.lstm = nn.LSTM(input_size, hidden_size, batch_first=True)
-        self.fc = nn.Linear(hidden_size, num_classes)
+        self.fc_in = nn.Linear(input_size, hidden_size)
+        self.lstm = nn.LSTM(hidden_size, hidden_size, batch_first=True, bidirectional=True)
+        self.fc_out = nn.Linear(hidden_size * 2, num_classes)
 
     def forward(self, x):
-        _, (h, c) = self.lstm(x)
-        out = self.fc(h[-1])
+        x = self.fc_in(x)
+        out, _ = self.lstm(x)
+        out = self.fc_out(out[:, -1, :])
         return out
 
 

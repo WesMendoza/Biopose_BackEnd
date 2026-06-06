@@ -148,6 +148,7 @@ class AnalysisReport(models.Model):
     tiempoProcesamientoSegundos = models.FloatField(null=True, blank=True, db_column='tiempoProcesamientoSegundos')
     estadisticas = models.JSONField(null=True, blank=True, db_column='estadisticas')
     resumenJson = models.JSONField(null=True, blank=True, db_column='resumenJson')
+    rutaJsonKeypoints = models.CharField(max_length=500, null=True, blank=True, db_column='rutaJsonKeypoints')
     generadoEn = models.DateTimeField(auto_now_add=True, db_column='generadoEn')
     actualizadoEn = models.DateTimeField(auto_now=True, db_column='actualizadoEn')
     usuarioCreacion = models.CharField(max_length=100, null=True, blank=True, db_column='usuarioCreacion')
