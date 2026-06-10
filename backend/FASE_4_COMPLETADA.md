@@ -25,6 +25,11 @@ Nota operativa: el flujo de video sí usa YOLO sobre frames muestreados para ext
 ### Consultar Resultados
 **GET** `/api/analysis/videos/{video_id}/results/`
 
+### Obtener JSON de Keypoints
+**GET** `/api/analysis/videos/{video_id}/keypoints-json/`
+
+Este endpoint expone el contenido del archivo JSON guardado en `AnalysisReport.rutaJsonKeypoints`. Se usa para que el frontend pueda leer los vectores de keypoints y dibujarlos sobre el video con `<canvas>`.
+
 *(Nota: Faltan las pruebas manuales o automatizadas, levantar un worker de Celery local, y probar el SSE para progreso en vivo de la Fase 4/5).*
 
 ## 4. Flujo Real de Prueba en Postman
@@ -53,8 +58,13 @@ Para validar la carga y el procesamiento de video con el entorno actual, el fluj
 3. **Consultar resultados**
 	- **GET** `/api/analysis/videos/{video_id}/results/`
 	- Método involucrado: `VideoResultsView.get()` en `backend/apps/analysis/api/behavior/views.py`
-	- Efecto: devuelve el resumen final cuando el video ya está `COMPLETED`, o `202` si sigue en proceso
+	- Efecto: devuelve el resumen final cuando el video ya está `COMPLETED`, o `202` si sigue en proceso. También expone `ruta_json_keypoints` para ubicar el archivo generado.
 	- Nota operativa: en la implementación actual no existe un endpoint de progreso incremental; "consultar progreso luego" significa repetir esta consulta cada pocos segundos hasta que el estado cambie o el reporte esté disponible.
+
+4. **Descargar JSON de keypoints**
+	- **GET** `/api/analysis/videos/{video_id}/keypoints-json/`
+	- Método involucrado: `VideoKeypointsJsonView.get()` en `backend/apps/analysis/api/behavior/views.py`
+	- Efecto: devuelve el contenido JSON real con los vectores de keypoints por frame para que el frontend los renderice sobre el video original.
 
 ## 5. Métodos Técnicos Involucrados
 

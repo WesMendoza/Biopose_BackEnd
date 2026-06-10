@@ -100,6 +100,9 @@ Todos los endpoints (excepto login) requieren enviar el token JWT en las cabecer
    * *Si no ha terminado:* Responde estado `"PROCESSING"`.
    * *Si terminó:* Responde HTTP 200 con el reporte de eventos (Pelea, Disturbio) y un campo nuevo llamado `rutaJsonKeypoints` (ej. `reports/keypoints_video_1.json`).
 
+4. **Obtener JSON de Keypoints:** `GET /api/analysis/videos/1/keypoints-json/`
+   * Responde: el contenido JSON real con los keypoints por frame, listo para que el frontend lo pinte sobre `<canvas>`.
+
 ---
 
 ## 🖌️ Instrucciones para el Desarrollador Frontend
@@ -108,7 +111,7 @@ Para optimizar rendimiento computacional, el backend **NO** devuelve un video MP
 
 **La nueva estrategia vectorial (Canvas):**
 1. Al consultar los resultados del video, el backend te entregará el archivo de video original sin procesar (`rutaArchivo`) y un archivo ligero (`rutaJsonKeypoints`) generado por Celery.
-2. Descarga el JSON de keypoints, que contiene un array con los eventos por segundo.
+2. Descarga el JSON de keypoints con `GET /api/analysis/videos/{id}/keypoints-json/`; contiene los vectores por frame y timestamp.
 3. En el `index.html`, superpón una etiqueta `<canvas>` transparente encima de la etiqueta `<video>`.
 4. Mediante JavaScript, escucha el evento `timeupdate` del reproductor de video, busca el `timestamp_sec` correspondiente en tu JSON, y dibuja las líneas anatómicas (`ctx.lineTo`) sobre el `<canvas>` en tiempo real.
 
