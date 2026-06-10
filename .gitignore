@@ -28,8 +28,6 @@ Tesis/
 [live]/
 
 # Modelos
-*.pt
-*.pth
 *.webm
 *.mp4
 
