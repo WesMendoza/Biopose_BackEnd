@@ -13,13 +13,21 @@ __pycache__/
 static/videos/uploads/
 static/videos/results/
 
+#Antigravity 
+.antigravitycli/
+[.antigravitycli]/
+
 #Tesis carpeta de referencia a la version V1 del proyecto 
 Tesis/
 [Tesis]/
+.static/
+[.static]/
+
+#Live
+.live/
+[live]/
 
 # Modelos
-*.pt
-*.pth
 *.webm
 *.mp4
 

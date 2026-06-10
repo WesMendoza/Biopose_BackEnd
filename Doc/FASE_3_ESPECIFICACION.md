@@ -268,6 +268,13 @@ Response 404:
 - **analitico**: Bounding box + esqueleto de pose + etiqueta (balance)
 - **debug**: Debug completo con telemetría LSTM, detalle de ventanas, scores internos
 
+**Arquitectura de Optimización de Procesamiento (Behavior)**:
+Para evitar la saturación del servidor, el endpoint de procesamiento aplicará las siguientes reglas lógicas antes de iniciar el worker:
+1. **Frame Skipping (`fps_skip`)**: Si se pasa `fps_skip=5`, el backend solo procesará 1 de cada 5 frames (efectivamente procesando a ~6 FPS).
+2. **Motion Gating**: Uso de OpenCV `BackgroundSubtractor` para saltar la inferencia YOLO si no se detecta cambio de píxeles (nadie se mueve).
+3. **Batch Inference**: Agrupar los frames extraídos en *batches* (lotes) para aprovechar la paralelización de YOLO en vez de iterarlos de 1 en 1.
+4. **Buffer Deslizante LSTM**: El modelo LSTM acumulará los keypoints generados por YOLO en una ventana (ej. 30 frames). Si hay suficientes humanos detectados y movimiento, se dispara la inferencia del LSTM.
+
 ---
 
 #### **2.2.3 Stream de Progreso (Server-Sent Events)**
@@ -585,16 +592,49 @@ class AnalysisReportSerializer(serializers.ModelSerializer):
 
 ---
 
-## 6. PLAN DE IMPLEMENTACIÓN (FASE 3)
+## 6. NUEVO PLAN DE IMPLEMENTACIÓN MODULAR (FASE 3)
 
-### Iteración 1: Estructura Base (1-2 días)
-- [ ] Crear `backend/apps/analysis/serializers.py` con todos los serializers
-- [ ] Crear `backend/apps/analysis/views.py` con ViewSets base
-- [ ] Crear `backend/apps/analysis/urls.py` con routers
-- [ ] Integrar servicios IA en views
+Para evitar el acoplamiento y heredar problemas del sistema legacy, la aplicación `analysis` se organizará en sub-módulos dentro de una carpeta `api/`. Se descarta el uso de archivos monolíticos (`views.py`, `serializers.py`).
 
-### Iteración 2: Procesamiento de Imágenes (2-3 días)
-- [ ] Implementar endpoint POST `/api/analysis/images/upload/`
+### Estructura de Directorios a Crear:
+```text
+backend/apps/analysis/api/
+├── router.py                  # Enrutador principal (incluye a los demás)
+├── media/                     # 📂 Carga y manejo de archivos/renderizados
+│   ├── urls.py
+│   ├── views.py
+│   └── serializers.py
+├── pose/                      # 📂 Detección de Keypoints (YOLO)
+│   ├── urls.py
+│   ├── views.py
+│   └── serializers.py
+├── behavior/                  # 📂 Detección de Actividad (LSTM)
+│   ├── urls.py
+│   ├── views.py
+│   └── serializers.py
+└── live/                      # 📂 Detección en vivo (Preparación WebRTC/SSE)
+    ├── urls.py
+    └── views.py
+```
+
+### Iteración 1: Refactorización y Módulo Media (1 día)
+- [ ] Eliminar `views.py` y `serializers.py` de la raíz de `analysis/`
+- [ ] Crear estructura de carpetas modular (`media/`, `pose/`, `behavior/`, `live/`)
+- [ ] Implementar `media/serializers.py` (Upload Image, Video)
+- [ ] Implementar `media/views.py` (Endpoints de carga y redimensionado de imágenes y videos)
+
+### Iteración 2: Módulo Pose (Keypoints) (1-2 días)
+- [ ] Implementar `pose/serializers.py` (KeypointSerializer)
+- [ ] Implementar `pose/views.py` (Procesamiento de imagen unitaria e interacción con `pose_detection.py`)
+- [ ] Endpoints para extraer frames desde video.
+
+### Iteración 3: Módulo Behavior (Actividad) (2 días)
+- [ ] Implementar `behavior/serializers.py` (DetectionEvent, AnalysisReport)
+- [ ] Implementar `behavior/views.py` (Evaluación de LSTM sobre el video)
+- [ ] Manejo de tareas asíncronas / HTTP 202 Accepted.
+
+### Iteración 4: Módulo Live (En vivo) (1 día)
+- [ ] Definición de endpoints de streaming (SSE) y preparación para WebSockets.
 - [ ] Implementar endpoint POST `/api/analysis/images/resize/`
 - [ ] Implementar endpoint POST `/api/analysis/images/save/`
 - [ ] Validar con imágenes de prueba

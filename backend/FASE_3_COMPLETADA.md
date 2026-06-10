@@ -1,11 +1,15 @@
-# FASE 3: Endpoints REST Básicos - Iteración 1 Completada ✅
+# FASE 3: Endpoints REST Básicos - Módulo de Carga e Inferencia de Imágenes Completado ✅
 
-**Estado**: ⏳ Estructura Base Implementada - Integración IA, persistencia y pruebas pendientes
+**Estado**: 🚀 Módulo de Imágenes 100% Funcional (Inferencia YOLOv8s-pose + Base de Datos + Multi-Tenant integrados)
 
-**Alcance real de esta iteración**: se creó la base documental y la estructura de ViewSets/serializers/routers, pero todavía no hay una implementación productiva completa de los endpoints.
+**Alcance real de esta iteración**:
+Se implementó y probó con total éxito el flujo completo de imágenes de la Fase 3:
+1. **Subida de Imágenes**: Endpoint `/api/analysis/media/images/upload/` que almacena la imagen física en disco y registra los metadatos en la tabla `"analysisImageUpload"` asociando automáticamente el usuario (`idUsuario`) y empresa (`idEmpresa`) del token JWT de la Fase 6.
+2. **Procesamiento de Pose (YOLO)**: Endpoint `/api/analysis/pose/image/<int:image_id>/process/` que toma la imagen subida en la base de datos, ejecuta la inferencia mediante el servicio de IA de la Fase 1 (`PoseDetectionService` basado en YOLOv8s-pose), guarda la imagen anotada con el esqueleto en disco, actualiza el registro a `COMPLETED` con la fecha y hora de procesamiento, y retorna los 17 keypoints anatómicos en formato COCO estándar.
+3. **Consistencia DDL/PostgreSQL**: Se estandarizó la base de datos a camelCase usando comillas dobles en SQL (`"analysisImageUpload"`, etc.) y se sincronizó el ORM de Django en `models.py` eliminando cualquier conflicto de nomenclatura.
 
 **Fecha de Inicio**: 2026-05-03
-**Fecha de Finalización de Iteración 1**: 2026-05-03
+**Fecha de Finalización de Iteración 1 y 2 (Imágenes)**: 2026-05-31
 
 ---
 
@@ -35,45 +39,58 @@
   - Endpoints consolidados listados (9 totales)
   - Mejoras arquitectónicas documentadas
 
-### 2. Código Python Fase 3 Creado ✅
+### 2. Código Python Fase 3 Creado (Refactorización Modular) ✅
 
-#### **backend/apps/analysis/serializers.py** (400+ líneas)
-```
-✅ Base de serializers creada para imagen, video, detecciones y frames
-✅ Estructuras de respuesta definidas para los endpoints de Fase 3
-✅ Serializers de soporte para errores, SSE y persistencia
-```
+Se implementó la nueva estructura modular dentro de `backend/apps/analysis/api/` en reemplazo del antiguo monolito.
 
-#### **backend/apps/analysis/views.py** (550+ líneas)
-```
-✅ ImageAnalysisViewSet, VideoAnalysisViewSet y FrameGenerationViewSet creados
-✅ Rutas y acciones base definidas para upload, process, stream, results, download y generate-from-video
-✅ La lógica de IA y la persistencia fina siguen pendientes de integración
-```
+#### **Módulo Media (`api/media/`)**
 
-#### **backend/apps/analysis/urls.py** (actualizado)
-```
-✅ DefaultRouter con 3 ViewSets registrados
-✅ Rutas automáticas para todos los endpoints de Fase 3
-```
+✅ `serializers.py`: `ImageUploadSerializer`, `VideoUploadSerializer`
+✅ `views.py`: `ImageUploadView`, `VideoUploadView`
+✅ `urls.py`: Rutas de subida
+
+- `POST /api/analysis/media/images/upload/`
+- `POST /api/analysis/media/videos/upload/`
+
+#### **Módulo Pose (`api/pose/`)**
+✅ `serializers.py`: `KeypointSerializer`, `PersonPoseSerializer`, etc.
+✅ `views.py`: `PoseDetectionImageView` (procesamiento YOLO + guardado de imagen anotada)
+✅ `urls.py`: Rutas de detección de keypoints
+   - `POST /api/analysis/pose/image/{image_id}/process/`
+
+#### **Módulo Behavior (`api/behavior/`)**
+
+✅ `serializers.py`: `DetectionEventSerializer`, `AnalysisReportSerializer`, `VideoProcessRequestSerializer`
+✅ `views.py`: `VideoProcessView`, `VideoResultsView` (inicio de procesamiento LSTM)
+✅ `urls.py`: Rutas de procesamiento y obtención de resultados
+
+- `POST /api/analysis/behavior/videos/{video_id}/process/`
+- `GET /api/analysis/behavior/videos/{video_id}/results/`
+
+#### **Router Principal (`api/router.py`)**
+
+✅ Archivo `router.py` enruta tráfico hacia `media/`, `pose/` y `behavior/`.
 
 ### 3. Arquitectura REST Implementada ✅
 
 **Endpoints Fase 3 (9 consolidados)**:
 
 #### Grupo 1: Análisis de Imágenes (3)
-- `POST /api/analysis/images/upload/` - YOLO v8s-pose → 17 keypoints COCO
+
+- `POST /api/analysis/media/images/upload/` - YOLO v8s-pose → 17 keypoints COCO
 - `POST /api/analysis/images/resize/` - Redimensiona imagen
 - `POST /api/analysis/images/save/` - Guarda imagen + keypoints en BD
 
 #### Grupo 2: Análisis de Videos (5)
-- `POST /api/analysis/videos/upload/` - Subir video (crea VideoUpload)
+
+- `POST /api/analysis/media/videos/upload/` - Subir video (crea VideoUpload)
 - `POST /api/analysis/videos/{id}/process/` - HTTP 202: inicia LSTM
 - `GET /api/analysis/videos/{id}/stream/` - SSE: progreso + eventos
 - `GET /api/analysis/videos/{id}/results/` - Detecciones consolidadas
 - `GET /api/analysis/videos/{id}/download/` - Descarga video procesado
 
 #### Grupo 3: Generación de Frames (1)
+
 - `POST /api/analysis/frames/generate-from-video/` - Extrae frames por FPS
 
 ---
@@ -164,13 +181,14 @@
 ## Notas Importantes
 
 ### Estructura de Media Folder
+
 ```
 backend/media/
 ├── images/
-│   ├── uploads/       # ← POST /images/upload/ guarda aquí
+│   ├── uploads/       # ← POST /media/images/upload/ guarda aquí
 │   └── processed/     # ← YOLO retorna aquí
 ├── videos/
-│   ├── uploads/       # ← POST /videos/upload/ guarda aquí
+│   ├── uploads/       # ← POST /media/videos/upload/ guarda aquí
 │   ├── processing/    # ← Procesamiento LSTM aquí (temporal)
 │   └── results/       # ← Video final procesado aquí
 └── reports/
@@ -178,6 +196,7 @@ backend/media/
 ```
 
 ### Modelos IA Integrados
+
 - **YOLO v8s-pose**: 17 keypoints COCO, tiempo ~0.25s por imagen
 - **LSTM 3-class**: Clasifica DISTURBIO, NEUTRAL, PELEAR. Window size: 32 frames
   - TH_PELEAR: 0.75
@@ -185,6 +204,7 @@ backend/media/
 - **BehaviorDetector3D**: Variante 3D (query param dimension=3D)
 
 ### HTTP Status Codes
+
 - `200 OK` - Procesamiento exitoso, respuesta lista
 - `202 Accepted` - Procesamiento asíncrono aceptado (POST /videos/{id}/process/)
 - `400 Bad Request` - Validación fallida (formato archivo, parámetros inválidos)
@@ -192,6 +212,7 @@ backend/media/
 - `500 Internal Server Error` - Error en IA o BD
 
 ### Próximos Pasos
+
 1. **Fase 3.2**: Integrar servicios IA y persistencia BD
 2. **Fase 4**: Implementar Celery para procesamiento asíncrono escalable
 3. **Fase 5**: Frontend React para UI de carga/resultados
@@ -199,6 +220,7 @@ backend/media/
 ---
 
 ## Referencias
+
 - [PLAN_MIGRACION_INCREMENTALV2.md](PLAN_MIGRACION_INCREMENTALV2.md) - Plan completo
 - [FASE_3_ESPECIFICACION.md](../Doc/FASE_3_ESPECIFICACION.md) - Especificación técnica
 - [FASE_3_COMPARATIVA_LEGACY_VS_DJANGO.md](../Doc/FASE_3_COMPARATIVA_LEGACY_VS_DJANGO.md) - Análisis legacy

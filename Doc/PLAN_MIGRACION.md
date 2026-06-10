@@ -235,13 +235,15 @@ backend/media/
 
 ### **Fase 4: Integración de Celery y Redis (Semana 2-3)**
 
-**Objetivo**: Mover procesamiento pesado a workers asíncronos.
+**Objetivo**: Mover procesamiento pesado a workers asíncronos y optimizar la visualización de resultados sin comprometer rendimiento.
+
+**Estrategia de Optimización Visual (JSON + Canvas)**: Para mostrar los keypoints sobre el video analizado, el backend *no* renderizará un nuevo video mp4 (que consumiría alta CPU y disco). En su lugar, guardará las coordenadas de los keypoints en un archivo JSON estático ligero, registrará la ruta en BD (`rutaJsonKeypoints` en el reporte), y delegará la tarea de dibujo vectorial en tiempo real al frontend mediante HTML5 Canvas sobre el video original.
 
 **Tareas**:
 1. Configurar Celery en `backend/core/celery.py`
 2. Configurar Redis para task broker
 3. Crear tareas (`tasks.py`):
-   - `process_video_task` - Procesar video completo
+   - `process_video_task` - Procesar video completo, generar JSON de keypoints y persistir rutas y reporte
    - `detect_pose_single_frame_task` - Detectar pose en un frame
    - `analyze_behavior_task` - Analizar comportamiento
 4. Integrar tareas con vistas REST

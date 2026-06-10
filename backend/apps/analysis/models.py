@@ -3,6 +3,39 @@ from django.db import models
 from apps.users.models import Users
 
 
+class ImageUpload(models.Model):
+    """Registro de imágenes subidas para detección de pose estática."""
+
+    STATUS_CHOICES = [
+        ('PENDING', 'Pendiente'),
+        ('PROCESSING', 'Procesando'),
+        ('COMPLETED', 'Completado'),
+        ('FAILED', 'Fallido'),
+    ]
+
+    idImageUpload = models.AutoField(primary_key=True, db_column='idImageUpload')
+    idUsuario = models.ForeignKey(Users, on_delete=models.SET_NULL, db_column='idUsuario', related_name='imagesUploaded', null=True, blank=True)
+    idEmpresa = models.IntegerField(null=True, blank=True, db_column='idEmpresa')
+    nombreOriginal = models.CharField(max_length=255, db_column='nombreOriginal')
+    rutaArchivoOriginal = models.CharField(max_length=500, db_column='rutaArchivoOriginal')
+    rutaArchivoProcesado = models.CharField(max_length=500, null=True, blank=True, db_column='rutaArchivoProcesado')
+    tamanioBytes = models.BigIntegerField(db_column='tamanioBytes')
+    estado = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING', db_column='estado')
+    fechaCarga = models.DateTimeField(auto_now_add=True, db_column='fechaCarga')
+    fechaProcesamiento = models.DateTimeField(null=True, blank=True, db_column='fechaProcesamiento')
+
+    class Meta:
+        db_table = 'analysisImageUpload'
+        managed = False
+        indexes = [
+            models.Index(fields=['estado'], name='ix_image_estado'),
+            models.Index(fields=['fechaCarga'], name='ix_image_fechacarga'),
+        ]
+
+    def __str__(self):
+        return f"{self.idImageUpload} - {self.nombreOriginal} ({self.estado})"
+
+
 class VideoUpload(models.Model):
     """Registro de videos subidos para procesamiento de análisis."""
 
@@ -13,21 +46,21 @@ class VideoUpload(models.Model):
         ('FAILED', 'Fallido'),
     ]
 
-    idVideoUpload = models.AutoField(primary_key=True)
-    idUsuario = models.ForeignKey(Users, on_delete=models.SET_NULL, db_column='idUsuario', related_name='videos_uploaded', null=True, blank=True)
-    idEmpresa = models.IntegerField(null=True, blank=True)  # FK a empresa.idEmpresa (auditoría/tenant)
-    nombreOriginal = models.CharField(max_length=255)
-    rutaArchivo = models.CharField(max_length=500)
-    tamanioBytes = models.BigIntegerField()
-    duracionSegundos = models.FloatField(null=True, blank=True)
-    fps = models.FloatField(null=True, blank=True)
-    estado = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
-    celeryTaskId = models.CharField(max_length=255, null=True, blank=True)
-    fechaCarga = models.DateTimeField(auto_now_add=True)
-    fechaProcesamiento = models.DateTimeField(null=True, blank=True)
+    idVideoUpload = models.AutoField(primary_key=True, db_column='idVideoUpload')
+    idUsuario = models.ForeignKey(Users, on_delete=models.SET_NULL, db_column='idUsuario', related_name='videosUploaded', null=True, blank=True)
+    idEmpresa = models.IntegerField(null=True, blank=True, db_column='idEmpresa')  # FK a empresa.idEmpresa (auditoría/tenant)
+    nombreOriginal = models.CharField(max_length=255, db_column='nombreOriginal')
+    rutaArchivo = models.CharField(max_length=500, db_column='rutaArchivo')
+    tamanioBytes = models.BigIntegerField(db_column='tamanioBytes')
+    duracionSegundos = models.FloatField(null=True, blank=True, db_column='duracionSegundos')
+    fps = models.FloatField(null=True, blank=True, db_column='fps')
+    estado = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING', db_column='estado')
+    celeryTaskId = models.CharField(max_length=255, null=True, blank=True, db_column='celeryTaskId')
+    fechaCarga = models.DateTimeField(auto_now_add=True, db_column='fechaCarga')
+    fechaProcesamiento = models.DateTimeField(null=True, blank=True, db_column='fechaProcesamiento')
 
     class Meta:
-        db_table = 'analysis_videoupload'
+        db_table = 'analysisVideoUpload'
         managed = False
         indexes = [
             models.Index(fields=['estado'], name='ix_video_estado'),
@@ -47,23 +80,23 @@ class DetectionEvent(models.Model):
         ('NORMAL', 'Normal'),
     ]
 
-    idDetectionEvent = models.AutoField(primary_key=True)
+    idDetectionEvent = models.AutoField(primary_key=True, db_column='idDetectionEvent')
     idVideoUpload = models.ForeignKey(VideoUpload, on_delete=models.CASCADE, db_column='idVideoUpload', related_name='eventos')
-    tipoEvento = models.CharField(max_length=20, choices=EVENT_TYPES)
-    confianza = models.FloatField()
-    frameInicio = models.IntegerField()
-    frameFin = models.IntegerField()
-    tiempoInicio = models.FloatField()
-    tiempoFin = models.FloatField()
-    personasInvolucradas = models.IntegerField(default=1)
-    detalles = models.JSONField(null=True, blank=True)
-    fechaCreacion = models.DateTimeField(auto_now_add=True)
-    usuarioCreacion = models.CharField(max_length=100, null=True, blank=True)
-    usuarioModificacion = models.CharField(max_length=100, null=True, blank=True)
-    fechaModificacion = models.DateTimeField(null=True, blank=True)
+    tipoEvento = models.CharField(max_length=20, choices=EVENT_TYPES, db_column='tipoEvento')
+    confianza = models.FloatField(db_column='confianza')
+    frameInicio = models.IntegerField(db_column='frameInicio')
+    frameFin = models.IntegerField(db_column='frameFin')
+    tiempoInicio = models.FloatField(db_column='tiempoInicio')
+    tiempoFin = models.FloatField(db_column='tiempoFin')
+    personasInvolucradas = models.IntegerField(default=1, db_column='personasInvolucradas')
+    detalles = models.JSONField(null=True, blank=True, db_column='detalles')
+    fechaCreacion = models.DateTimeField(auto_now_add=True, db_column='fechaCreacion')
+    usuarioCreacion = models.CharField(max_length=100, null=True, blank=True, db_column='usuarioCreacion')
+    usuarioModificacion = models.CharField(max_length=100, null=True, blank=True, db_column='usuarioModificacion')
+    fechaModificacion = models.DateTimeField(null=True, blank=True, db_column='fechaModificacion')
 
     class Meta:
-        db_table = 'analysis_detectionevent'
+        db_table = 'analysisDetectionEvent'
         managed = False
         indexes = [
             models.Index(fields=['idVideoUpload', 'fechaCreacion'], name='ix_event_video_fecha'),
@@ -77,18 +110,18 @@ class DetectionEvent(models.Model):
 class PersonKeypoints(models.Model):
     """Keypoints de una persona detectada en un frame específico."""
 
-    idPersonKeypoints = models.AutoField(primary_key=True)
+    idPersonKeypoints = models.AutoField(primary_key=True, db_column='idPersonKeypoints')
     idDetectionEvent = models.ForeignKey(DetectionEvent, on_delete=models.CASCADE, db_column='idDetectionEvent', related_name='keypoints')
-    personId = models.IntegerField()
-    frameNumber = models.IntegerField()
-    keypointsJson = models.JSONField(default=dict)
-    fechaCreacion = models.DateTimeField(auto_now_add=True)
-    usuarioCreacion = models.CharField(max_length=100, null=True, blank=True)
-    usuarioModificacion = models.CharField(max_length=100, null=True, blank=True)
-    fechaModificacion = models.DateTimeField(null=True, blank=True)
+    personId = models.IntegerField(db_column='personId')
+    frameNumber = models.IntegerField(db_column='frameNumber')
+    keypointsJson = models.JSONField(default=dict, db_column='keypointsJson')
+    fechaCreacion = models.DateTimeField(auto_now_add=True, db_column='fechaCreacion')
+    usuarioCreacion = models.CharField(max_length=100, null=True, blank=True, db_column='usuarioCreacion')
+    usuarioModificacion = models.CharField(max_length=100, null=True, blank=True, db_column='usuarioModificacion')
+    fechaModificacion = models.DateTimeField(null=True, blank=True, db_column='fechaModificacion')
 
     class Meta:
-        db_table = 'analysis_personkeypoints'
+        db_table = 'analysisPersonKeypoints'
         managed = False
         indexes = [
             models.Index(fields=['idDetectionEvent', 'personId'], name='ix_kp_event_person'),
@@ -102,28 +135,29 @@ class PersonKeypoints(models.Model):
 class AnalysisReport(models.Model):
     """Reporte consolidado por video procesado."""
 
-    idAnalysisReport = models.AutoField(primary_key=True)
+    idAnalysisReport = models.AutoField(primary_key=True, db_column='idAnalysisReport')
     idVideoUpload = models.OneToOneField(VideoUpload, on_delete=models.CASCADE, db_column='idVideoUpload', related_name='reporte')
-    idEmpresa = models.IntegerField(null=True, blank=True)  # FK a empresa.idEmpresa (auditoría/tenant)
-    totalFrames = models.IntegerField(default=0)
-    totalDuracionSegundos = models.FloatField(default=0)
-    totalEventos = models.IntegerField(default=0)
-    totalPeleas = models.IntegerField(default=0)
-    totalDisturbios = models.IntegerField(default=0)
-    confianzaPromedio = models.FloatField(default=0)
-    confianzaMaxima = models.FloatField(default=0)
-    tiempoProcesamientoSegundos = models.FloatField(null=True, blank=True)
-    estadisticas = models.JSONField(null=True, blank=True)
-    resumenJson = models.JSONField(null=True, blank=True)
-    generadoEn = models.DateTimeField(auto_now_add=True)
-    actualizadoEn = models.DateTimeField(auto_now=True)
-    usuarioCreacion = models.CharField(max_length=100, null=True, blank=True)
-    usuarioModificacion = models.CharField(max_length=100, null=True, blank=True)
-    fechaCreacion = models.DateTimeField(auto_now_add=True)
-    fechaModificacion = models.DateTimeField(null=True, blank=True)
+    idEmpresa = models.IntegerField(null=True, blank=True, db_column='idEmpresa')  # FK a empresa.idEmpresa (auditoría/tenant)
+    totalFrames = models.IntegerField(default=0, db_column='totalFrames')
+    totalDuracionSegundos = models.FloatField(default=0, db_column='totalDuracionSegundos')
+    totalEventos = models.IntegerField(default=0, db_column='totalEventos')
+    totalPeleas = models.IntegerField(default=0, db_column='totalPeleas')
+    totalDisturbios = models.IntegerField(default=0, db_column='totalDisturbios')
+    confianzaPromedio = models.FloatField(default=0, db_column='confianzaPromedio')
+    confianzaMaxima = models.FloatField(default=0, db_column='confianzaMaxima')
+    tiempoProcesamientoSegundos = models.FloatField(null=True, blank=True, db_column='tiempoProcesamientoSegundos')
+    estadisticas = models.JSONField(null=True, blank=True, db_column='estadisticas')
+    resumenJson = models.JSONField(null=True, blank=True, db_column='resumenJson')
+    rutaJsonKeypoints = models.CharField(max_length=500, null=True, blank=True, db_column='rutaJsonKeypoints')
+    generadoEn = models.DateTimeField(auto_now_add=True, db_column='generadoEn')
+    actualizadoEn = models.DateTimeField(auto_now=True, db_column='actualizadoEn')
+    usuarioCreacion = models.CharField(max_length=100, null=True, blank=True, db_column='usuarioCreacion')
+    usuarioModificacion = models.CharField(max_length=100, null=True, blank=True, db_column='usuarioModificacion')
+    fechaCreacion = models.DateTimeField(auto_now_add=True, db_column='fechaCreacion')
+    fechaModificacion = models.DateTimeField(null=True, blank=True, db_column='fechaModificacion')
 
     class Meta:
-        db_table = 'analysis_report'
+        db_table = 'analysisReport'
         managed = False
 
     def __str__(self):

@@ -51,8 +51,9 @@ Se debe aplicar un control estricto sobre los nombres de carpetas, archivos y es
 
 **Convenciones de Base de Datos y Código (Estándar camelCase):**
 - Por definición del proyecto, se utilizará **camelCase** como estándar universal transversal.
-- Las tablas en la base de datos (ej. `empresaUsuarioRol`), sus columnas (`codigoEmpresa`, `idUsuario`), y las respuestas JSON de la API deben ir en `camelCase`.
-- **En el ORM de Django (`models.py`):** Se debe romper la convención PEP 8 de Python y declarar todas las propiedades, variables y métodos de los modelos usando estrictamente `camelCase` (ej. `nombreEmpresa = models.CharField(...)`). Esto garantiza consistencia visual y reduce la fricción mental entre la tabla física, el modelo en backend y la interfaz frontend.
+- Las tablas en la base de datos (ej. `"empresaUsuarioRol"`), sus columnas (`"codigoEmpresa"`, `"idUsuario"`), y las respuestas JSON de la API deben ir en `camelCase`.
+- **Regla Estricta en PostgreSQL:** Dado que PostgreSQL convierte todos los identificadores sin comillas a minúsculas por defecto (ej. `nombreOriginal` pasaría a ser `nombreoriginal`), **todas las tablas y columnas escritas en camelCase en los scripts SQL (DDL) DEBEN ser declaradas obligatoriamente entre comillas dobles (ej. `"analysisImageUpload"`, `"idImageUpload"`, `"nombreOriginal"`)**. Esto fuerza a la base de datos a respetar de forma estricta la distinción de mayúsculas/minúsculas.
+- **En el ORM de Django (`models.py`):** Se debe romper la convención PEP 8 de Python y declarar todas las propiedades, variables y métodos de los modelos usando estrictamente `camelCase` (ej. `nombreEmpresa = models.CharField(...)`). Esto garantiza consistencia visual y reduce la fricción mental entre la tabla física, el modelo en backend y la interfaz frontend. Las propiedades `db_table` y `db_column` de Django deben usar la escritura camelCase exacta y sensible a mayúsculas/minúsculas que se declaró entre comillas en SQL (ej. `db_table = 'analysisImageUpload'`, `db_column = 'nombreOriginal'`).
 
 ## Gestión y Scripts de Base de Datos (Enfoque Manual Estricto)
 
@@ -184,6 +185,7 @@ Esto permite:
 - Documentar decisiones tecnicas importantes.
 - Separar logica de negocio, acceso a datos y presentacion.
 - Evitar dependencias innecesarias.
+- **Rendimiento Computacional de IA:** Todo servicio que procese flujos de video debe implementar obligatoriamente técnicas de optimización (Ej. Frame Skipping, Batch Inference, Redimensionado y Motion Gating) para evitar bloqueos del hilo principal y reducir el consumo de memoria.
 
 ## Versionamiento y seguimiento
 
