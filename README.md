@@ -134,8 +134,8 @@ El proyecto mantiene un historial riguroso de cada fase completada. Para entende
 * **Detalle:** Incluye todo el flujo de subida de **Imágenes** y procesamiento sincrónico. Se separó la lógica en la app `analysis`. También puedes consultar la [FASE_3_ESPECIFICACION.md](Doc/FASE_3_ESPECIFICACION.md) para ver el mapeo exacto de las rutas antiguas vs nuevas.
 
 ### [FASE_4_COMPLETADA.md](backend/FASE_4_COMPLETADA.md) (Celery + Redis)
-* **Logro:** Procesamiento asíncrono pesado.
-* **Detalle:** Se implementó el patrón *Background Worker* para evitar que el servidor de Django se bloquee. Aquí se consolidó la generación del JSON dinámico en lugar de renderizar videos completos en disco.
+* **Logro:** Procesamiento asíncrono pesado y análisis multi-persona.
+* **Detalle:** Se implementó el patrón *Background Worker* para evitar que el servidor de Django se bloquee. Aquí se consolidó la generación del JSON dinámico en lugar de renderizar videos completos en disco, y se integró ByteTrack de YOLO para evaluar individualmente a múltiples personas simultáneas con el modelo LSTM.
 
 ### [FASE_6_COMPLETADA.md](backend/FASE_6_COMPLETADA.md) (Autenticación y Roles)
 * **Logro:** Sistema Multi-Tenant seguro.

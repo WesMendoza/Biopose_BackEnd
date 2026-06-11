@@ -79,8 +79,9 @@ def analyze_video_behavior(video_path, mode='operativo', dimension='2D', fps_ski
     # 1. OPTIMIZACIÓN: Inicializar Motion Gating (Filtro de movimiento)
     bg_subtractor = cv2.createBackgroundSubtractorMOG2(history=50, varThreshold=25, detectShadows=False)
 
-    sampled_keypoints = []
+    sequences_by_person = {}
     sampled_frames = []
+    person_keypoints = []
     
     fps_skip = max(1, fps_skip)
     frame_index = 0
@@ -109,83 +110,94 @@ def analyze_video_behavior(video_path, mode='operativo', dimension='2D', fps_ski
         if motion_level < 500:
             continue
 
-        raw_pose = get_pose_service().detect_pose_frame(frame_resized)
-        first_person = _first_person_keypoints(raw_pose)
-        if len(first_person) < 17:
+        timestamp_sec = float(current_idx / fps) if fps else 0.0
+
+        # RASTREO MULTI-PERSONA CON BYTETRACK
+        tracking_data = get_pose_service().detect_pose_with_tracking(frame_resized, persist=True)
+        tracked_persons = tracking_data.get('tracked_persons', [])
+        
+        if not tracked_persons:
             continue
 
         sampled_frames.append({
             'frame_index': current_idx,
-            'timestamp_sec': float(current_idx / fps) if fps else 0.0,
+            'timestamp_sec': timestamp_sec,
             'frame': frame_resized,
         })
-        sampled_keypoints.append([[float(point[0]), float(point[1])] for point in first_person[:17]])
 
-    capture.release()
-
-    detections = []
-    person_keypoints = []
-    if sampled_keypoints:
-        sequence = np.array(sampled_keypoints, dtype=np.float32)
-        if sequence.ndim != 3 or sequence.shape[1] != 17:
-            return {
-                'detections': [],
-                'person_keypoints': [],
-                'total_frames': total_frames,
-                'duration_seconds': duration_seconds,
-                'processing_time_seconds': round(time.time() - start_time, 3),
-                'summary': {
-                    'detections_by_type': {},
-                    'average_confidence': 0.0,
-                    'max_confidence': 0.0,
-                    'error': 'Secuencia de keypoints inválida'
-                },
-            }
-        if sequence.shape[0] < get_behavior_service().window_size:
-            pad_count = get_behavior_service().window_size - sequence.shape[0]
-            sequence = np.concatenate([sequence, np.repeat(sequence[-1][None, :, :], pad_count, axis=0)], axis=0)
-
-        prediction = get_behavior_service().predict_behavior(sequence, confidence_threshold=confidence_threshold)
-        label = prediction.get('behavior', 'UNKNOWN')
-        confidence = float(prediction.get('confidence', 0.0))
-
-        if prediction.get('is_valid') and label not in ('UNKNOWN', 'ERROR'):
-            last_frame = sampled_frames[-1]
-            detections.append({
-                'tipo_evento': label,
-                'confianza': confidence,
-                'frame_inicio': sampled_frames[0]['frame_index'],
-                'frame_fin': last_frame['frame_index'],
-                'segundo_inicio': sampled_frames[0]['timestamp_sec'],
-                'segundo_fin': last_frame['timestamp_sec'],
-                'personas_involucradas': 1,
-                'detalles': {
-                    'mode': mode,
-                    'dimension': dimension,
-                    'all_probs': prediction.get('all_probs', {}),
-                },
-                'bounding_boxes': [],
-                'frame_base64': '',
-            })
-
-            # Modificado: Se guardan TODOS los keypoints en lugar de solo el último
-            for sf, kp in zip(sampled_frames, sampled_keypoints):
+        for person in tracked_persons:
+            p_id = person.get('person_id', 0)
+            p_kps = person.get('keypoints', [])
+            
+            if len(p_kps) >= 17:
+                kps_xy = [[float(point[0]), float(point[1])] for point in p_kps[:17]]
+                
+                if p_id not in sequences_by_person:
+                    sequences_by_person[p_id] = []
+                    
+                sequences_by_person[p_id].append({
+                    'frame_index': current_idx,
+                    'timestamp_sec': timestamp_sec,
+                    'keypoints': kps_xy
+                })
+                
                 keypoints_json = []
-                for index, point in enumerate(kp):
+                for index, point in enumerate(kps_xy):
                     keypoints_json.append({
                         'id': index,
                         'name': COCO_KEYPOINT_NAMES[index],
                         'x': point[0],
                         'y': point[1],
                         'z': 0.0,
-                        'confidence': 1.0, # point solo tiene x e y
+                        'confidence': 1.0, 
                     })
+                    
                 person_keypoints.append({
-                    'person_id': 0,
-                    'frame_index': sf['frame_index'],
-                    'timestamp_sec': sf['timestamp_sec'],
+                    'person_id': p_id,
+                    'frame_index': current_idx,
+                    'timestamp_sec': timestamp_sec,
                     'keypoints_json': keypoints_json,
                 })
+
+    capture.release()
+
+    detections = []
+    
+    # 5. INFERENCIA LSTM INDEPENDIENTE POR CADA PERSONA
+    for p_id, seq_data in sequences_by_person.items():
+        if not seq_data:
+            continue
+            
+        sequence_np = np.array([item['keypoints'] for item in seq_data], dtype=np.float32)
+        if sequence_np.ndim != 3 or sequence_np.shape[1] != 17:
+            continue
+            
+        if sequence_np.shape[0] < get_behavior_service().window_size:
+            pad_count = get_behavior_service().window_size - sequence_np.shape[0]
+            sequence_np = np.concatenate([sequence_np, np.repeat(sequence_np[-1][None, :, :], pad_count, axis=0)], axis=0)
+
+        prediction = get_behavior_service().predict_behavior(sequence_np, confidence_threshold=confidence_threshold)
+        label = prediction.get('behavior', 'UNKNOWN')
+        confidence = float(prediction.get('confidence', 0.0))
+
+        if prediction.get('is_valid') and label not in ('UNKNOWN', 'ERROR', 'Normal'):
+            detections.append({
+                'tipo_evento': label,
+                'confianza': confidence,
+                'frame_inicio': seq_data[0]['frame_index'],
+                'frame_fin': seq_data[-1]['frame_index'],
+                'segundo_inicio': seq_data[0]['timestamp_sec'],
+                'segundo_fin': seq_data[-1]['timestamp_sec'],
+                'personas_involucradas': len(sequences_by_person),
+                'detalles': {
+                    'mode': mode,
+                    'dimension': dimension,
+                    'all_probs': prediction.get('all_probs', {}),
+                    'trigger_person_id': p_id
+                },
+                'bounding_boxes': [],
+                'frame_base64': '',
+            })
 
     summary = {
         'detections_by_type': {},

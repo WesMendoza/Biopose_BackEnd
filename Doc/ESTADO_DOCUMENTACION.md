@@ -5,7 +5,7 @@
 - Fase 1: Servicios de IA preparados, validados y saneados (Arquitectura Limpia). Código legacy/basura del monolito eliminado. Los módulos son independientes y no tienen dependencias tóxicas.
 - Fase 2: Modelos Django y script SQL versionados y registrados.
 - Fase 3: Endpoints REST refactorizados en estructura modular (`api/media`, `api/pose`, `api/behavior`). Implementación de serializers y views para YOLO y LSTM.
-- Fase 4 (EN PROGRESO): Implementación de Celery y Redis para procesamiento asíncrono pesado de video (Behavior Module). El flujo actual de video realiza muestreo de frames, detecta keypoints intermedios con YOLO y alimenta el clasificador LSTM, pero aún no persiste capturas/keypoints como entidades separadas.
+- Fase 4 (EN PROGRESO): Implementación de Celery y Redis para procesamiento asíncrono pesado de video (Behavior Module). Se integró seguimiento Multi-Persona con ByteTrack para evaluar a cada actor de forma individual. El flujo actual realiza muestreo de frames, detecta keypoints intermedios con YOLO y alimenta el clasificador LSTM por cada persona, persistiendo los resultados vectoriales en JSON.
 - Fase 6: Autenticación refactorizada, soporte multi-tenant (Empresas, Roles dinámicos por empresa) y asignación estricta de opciones de menú. Pruebas de API y ajustes de seguridad completados exitosamente.
 
 ## Documentos activos
