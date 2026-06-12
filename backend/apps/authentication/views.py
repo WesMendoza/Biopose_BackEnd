@@ -15,7 +15,7 @@ class AuthViewSet(viewsets.ViewSet):
     """
     permission_classes = [AllowAny]
     #Metodo Login, recibe correo y contraseña, valida y retorna token JWT
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'],permission_classes=[AllowAny])
     def login(self, request):
         serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():
@@ -50,7 +50,7 @@ class AuthViewSet(viewsets.ViewSet):
         }, status=status.HTTP_400_BAD_REQUEST)
     
     #Metodo Register, recibe datos del usuario, valida y crea una nueva cuenta
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'],permission_classes=[AllowAny])
     def registerAccount(self, request):
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
@@ -83,7 +83,7 @@ class AuthViewSet(viewsets.ViewSet):
         }, status=status.HTTP_400_BAD_REQUEST)
 
     #Metodo para verificar si una cédula ya existe en la base de datos
-    @action(detail=False, methods=['post'], url_path='verifyCedula')
+    @action(detail=False, methods=['post'], url_path='verifyCedula',permission_classes=[AllowAny])
     def verifyCedula(self, request):
         serializer = VerifyCedulaSerializer(data=request.data)
         if serializer.is_valid():
@@ -101,7 +101,7 @@ class AuthViewSet(viewsets.ViewSet):
         }, status=status.HTTP_400_BAD_REQUEST)
 
     #Metodo para verificar si un correo ya existe en la base de datos
-    @action(detail=False, methods=['post'], url_path='verifyEmail')
+    @action(detail=False, methods=['post'], url_path='verifyEmail',permission_classes=[AllowAny])
     def verifyEmail(self, request):
         serializer = VerifyEmailSerializer(data=request.data)
         if serializer.is_valid():
