@@ -18,3 +18,5 @@ CREATE TABLE IF NOT EXISTS "analysisImageUpload" (
 
 CREATE INDEX IF NOT EXISTS ix_image_estado ON "analysisImageUpload" (estado);
 CREATE INDEX IF NOT EXISTS ix_image_fechacarga ON "analysisImageUpload" ("fechaCarga");
+
+ALTER TABLE "analysisImageUpload" ADD COLUMN "rutaArchivoJson" VARCHAR(500) NULL;

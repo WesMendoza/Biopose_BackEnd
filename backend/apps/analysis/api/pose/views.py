@@ -1,5 +1,7 @@
 import os
 import cv2
+import json
+import uuid
 import numpy as np
 from django.conf import settings
 from rest_framework.views import APIView
@@ -78,15 +80,32 @@ class PoseDetectionImageView(APIView):
 
         # 4. Validar formato de salida IA e inyectarlos para respuesta
         persons_formatted = []
-        for p in results_ia.get('keypoints', []):
+        
+        # Extraer listas separadas enviadas por pose_detection.py
+        all_persons_data = results_ia.get('keypoints', [])
+        all_confidences = results_ia.get('confidences', [])
+
+        for idx, p in enumerate(all_persons_data):
             person_coords = p.get('keypoints', [])
-            formatted_kps = [
-                {"id": i, "name": f"kp_{i}", "x": kp[0], "y": kp[1], "confidence": 1.0}
-                for i, kp in enumerate(person_coords)
-            ]
+            
+            # Obtenemos el arreglo de confianzas solo de esta persona
+            person_confs = all_confidences[idx] if idx < len(all_confidences) else []
+            
+            formatted_kps = []
+            for i, kp in enumerate(person_coords):
+                # Extraemos la confianza real. Si falla por algo, ponemos 0.0
+                conf = float(person_confs[i]) if i < len(person_confs) else 0.0
+                
+                formatted_kps.append({
+                    "id": i, 
+                    "name": f"kp_{i}", 
+                    "x": float(kp[0]), 
+                    "y": float(kp[1]), 
+                    "confidence": conf  # <-- AHORA ASIGNA LA CONFIANZA REAL DE YOLO
+                })
             
             persons_formatted.append({
-                "person_id": p.get('person_id', 0),
+                "person_id": p.get('person_id', idx),
                 "bbox": {"x1": 0, "y1": 0, "x2": 0, "y2": 0}, 
                 "keypoints": formatted_kps
             })
@@ -99,6 +118,32 @@ class PoseDetectionImageView(APIView):
             "processed_image_path": relative_path,
             "persons": persons_formatted
         }
+
+        # =================================================================
+        # NUEVO: GUARDAR RESULTADOS EN UN ARCHIVO JSON Y EN LA BD
+        # =================================================================
+        try:
+            # 1. Crear la carpeta 'reports' si no existe
+            reports_dir = os.path.join(settings.MEDIA_ROOT, 'reports')
+            os.makedirs(reports_dir, exist_ok=True)
+            
+            # 2. Generar nombre de archivo (ej: keypoints_image_15_ab12cd.json)
+            json_filename = f"keypoints_image_{image_record.pk}_{uuid.uuid4().hex[:6]}.json"
+            json_path = os.path.join(reports_dir, json_filename)
+            
+            # 3. Guardar el archivo físicamente en el disco
+            with open(json_path, 'w', encoding='utf-8') as json_file:
+                json.dump(response_data, json_file, ensure_ascii=False, indent=4)
+                
+            # 4. Guardar la ruta relativa en nuestra nueva columna de la BD
+            image_record.rutaArchivoJson = f"reports/{json_filename}"
+            image_record.save()
+                
+        except Exception as e:
+            # Si falla la creación del archivo, imprimimos el error pero no 
+            # tumbamos la respuesta (el frontend igual recibirá la data).
+            print(f"Advertencia: No se pudo guardar el JSON de la imagen {image_record.pk}: {str(e)}")
+        # =================================================================
 
         out_serializer = PoseDetectionResponseSerializer(data=response_data)
         out_serializer.is_valid(raise_exception=True)
