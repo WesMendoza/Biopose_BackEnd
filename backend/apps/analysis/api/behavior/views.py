@@ -147,16 +147,15 @@ class VideoKeypointsJsonView(APIView):
 class SaveVideoToDiskView(APIView):
     """
     POST /api/analysis/videos/<video_id>/save-to-disk/
-    Genera los fotogramas 'al vuelo' desde el video original basado en el JSON 
-    y los guarda en la ruta del usuario.
+    Genera los fotogramas 'al vuelo' desde el video original y guarda el JSON 
+    modificado por el usuario en la ruta destino.
     """
     def post(self, request, video_id):
         video_upload = get_object_or_404(VideoUpload, idVideoUpload=video_id)
-        target_path = request.data.get('target_path')
         
-        # Obtenemos las dimensiones elegidas en el frontend (ej. 300x445)
-        target_width = request.data.get('width', None)
-        target_height = request.data.get('height', None)
+        target_path = request.data.get('target_path')
+        # ¡NUEVO!: Recibimos el JSON con los puntos editados por el usuario
+        results_payload = request.data.get('results') 
 
         if not target_path:
             return Response({"error": "Falta la ruta de guardado (target_path)."}, status=status.HTTP_400_BAD_REQUEST)
@@ -171,55 +170,50 @@ class SaveVideoToDiskView(APIView):
             next_number = len(existing_jsons) + 1
             video_base_name = f"{next_number:05d}"
             
-            # 1. Obtener Reporte y ruta del JSON
-            try:
-                reporte = AnalysisReport.objects.get(idVideoUpload=video_upload)
-                source_json_path = _resolve_media_path(reporte.rutaJsonKeypoints)
-                if not source_json_path or not os.path.exists(source_json_path):
-                    return Response({"error": "El JSON de resultados no existe en el servidor."}, status=status.HTTP_404_NOT_FOUND)
-            except AnalysisReport.DoesNotExist:
-                return Response({"error": "No hay un reporte de análisis generado para este video."}, status=status.HTTP_404_NOT_FOUND)
-
-            # 2. Copiar el JSON a la carpeta seleccionada
+            # 1. GUARDAR EL JSON EDITADO EN LA CARPETA SELECCIONADA
             dest_json_path = os.path.join(target_path, f"{video_base_name}.json")
-            shutil.copy2(source_json_path, dest_json_path)
+            
+            if results_payload:
+                # Escribimos el JSON que tú modificaste en React directamente en el disco
+                with open(dest_json_path, 'w', encoding='utf-8') as json_file:
+                    json.dump(results_payload, json_file, ensure_ascii=False, indent=4)
+                json_data = results_payload # Usamos este mismo para leer los tiempos
+            else:
+                # Fallback por si acaso: Si no envían edits, copiamos el original
+                try:
+                    reporte = AnalysisReport.objects.get(idVideoUpload=video_upload)
+                    source_json_path = _resolve_media_path(reporte.rutaJsonKeypoints)
+                    if source_json_path and os.path.exists(source_json_path):
+                        shutil.copy2(source_json_path, dest_json_path)
+                        with open(source_json_path, 'r', encoding='utf-8') as f:
+                            json_data = json.load(f)
+                    else:
+                        raise Exception()
+                except Exception:
+                    return Response({"error": "No hay datos JSON disponibles para guardar."}, status=status.HTTP_404_NOT_FOUND)
 
-            # 3. EXTRAER FOTOGRAMAS DEL VIDEO ORIGINAL AL VUELO
+            # 2. EXTRAER FOTOGRAMAS DEL VIDEO ORIGINAL AL VUELO
             video_file_path = _resolve_media_path(video_upload.rutaArchivo)
             if not video_file_path or not os.path.exists(video_file_path):
                 return Response({"error": "El video original no se encuentra."}, status=status.HTTP_404_NOT_FOUND)
-
-            # Leer el JSON para saber qué segundos extraer
-            with open(source_json_path, 'r', encoding='utf-8') as f:
-                json_data = json.load(f)
             
-            # Detectar en qué nodo guardas los frames (depende de la salida de Celery)
+            # Detectar en qué nodo están guardados los frames
             frames_list = []
             if isinstance(json_data, dict):
                 frames_list = json_data.get('keypoints_data') or json_data.get('keypoints') or json_data.get('frames') or json_data.get('data') or []
             elif isinstance(json_data, list):
                 frames_list = json_data
 
-            # Abrir el video
+            # Abrir el video y capturar los frames exactos
             cap = cv2.VideoCapture(video_file_path)
             
             for idx, frame_info in enumerate(frames_list):
-                # Extraemos el tiempo exacto en que ocurrió la detección
                 timestamp_sec = frame_info.get('timestamp_sec', frame_info.get('time', 0))
                 
-                # Movemos el cursor del video a ese milisegundo exacto
                 cap.set(cv2.CAP_PROP_POS_MSEC, float(timestamp_sec) * 1000)
                 success, frame = cap.read()
                 
                 if success:
-                    # Aplicar redimensionamiento si el usuario lo seleccionó
-                    #if target_width and target_height:
-                        #try:
-                            #frame = cv2.resize(frame, (int(target_width), int(target_height)))
-                       # except Exception:
-                            #pass # Si falla por alguna razón, guarda el original
-                            
-                    # Guardar como 00001_frame_001.jpg
                     dest_name = f"{video_base_name}_frame_{idx+1:03d}.jpg"
                     dest_path = os.path.join(dir_imagen, dest_name)
                     cv2.imwrite(dest_path, frame)
