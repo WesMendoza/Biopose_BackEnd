@@ -1,26 +1,23 @@
 import os
 import cv2
 import json
+import base64
 import uuid
-import numpy as np
+import shutil
 from django.conf import settings
+from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.parsers import MultiPartParser, FormParser
 
 from .serializers import PoseDetectionResponseSerializer
-from apps.analysis.api.media.serializers import ImageUploadSerializer
-
-# Importar el servicio IA sanitizado de la Fase 1
 from services.pose_detection import PoseDetectionService
-
 from apps.analysis.models import ImageUpload
 
 class PoseDetectionImageView(APIView):
     """
     POST /api/analysis/pose/image/<image_id>/process/
-    Procesa una imagen previamente subida usando YOLO, dibuja los keypoints y actualiza su registro en BD.
+    Procesa la imagen usando YOLO y guarda los resultados INTERNOS en MEDIA_ROOT para la UI.
     """
     def post(self, request, image_id, *args, **kwargs):
         try:
@@ -37,34 +34,32 @@ class PoseDetectionImageView(APIView):
         image_record.estado = "PROCESSING"
         image_record.save()
 
-        # 2. Leer imagen del disco
+        # Leer imagen del servidor
         image_path = os.path.join(settings.MEDIA_ROOT, image_record.rutaArchivoOriginal)
         if not os.path.exists(image_path):
             image_record.estado = "FAILED"
             image_record.save()
-            return Response({"error": "File missing", "message": "El archivo físico no se encuentra."}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"error": "File missing"}, status=status.HTTP_404_NOT_FOUND)
 
         cv_image = cv2.imread(image_path)
         if cv_image is None:
             image_record.estado = "FAILED"
             image_record.save()
-            return Response({"error": "Corrupted image", "message": "No se pudo decodificar la imagen."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "Corrupted image"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 3. Mandar a inferencia vía capa de servicios IA (Fase 1)
+        # Inferencia con YOLO
         try:
             pose_service = PoseDetectionService()
             results_ia, annotated_frame = pose_service.detect_and_draw_pose_frame(cv_image)
             
-            # Guardar la imagen procesada
-            import uuid
+            # Guardado interno del Back
             processed_dir = os.path.join(settings.MEDIA_ROOT, 'images', 'processed')
             os.makedirs(processed_dir, exist_ok=True)
             safe_filename = f"pose_{uuid.uuid4().hex[:8]}.jpg"
-            processed_path = os.path.join(processed_dir, safe_filename)
-            cv2.imwrite(processed_path, annotated_frame)
             relative_path = f"images/processed/{safe_filename}"
             
-            from django.utils import timezone
+            cv2.imwrite(os.path.join(processed_dir, safe_filename), annotated_frame)
+            
             image_record.rutaArchivoProcesado = relative_path
             image_record.estado = "COMPLETED"
             image_record.fechaProcesamiento = timezone.now()
@@ -73,35 +68,26 @@ class PoseDetectionImageView(APIView):
         except Exception as e:
             image_record.estado = "FAILED"
             image_record.save()
-            return Response({
-                "error": "AI Processing Error",
-                "message": f"Falló la inferencia de YOLO: {str(e)}"
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": "AI Processing Error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        # 4. Validar formato de salida IA e inyectarlos para respuesta
+        # Formatear Keypoints
         persons_formatted = []
-        
-        # Extraer listas separadas enviadas por pose_detection.py
         all_persons_data = results_ia.get('keypoints', [])
         all_confidences = results_ia.get('confidences', [])
 
         for idx, p in enumerate(all_persons_data):
             person_coords = p.get('keypoints', [])
-            
-            # Obtenemos el arreglo de confianzas solo de esta persona
             person_confs = all_confidences[idx] if idx < len(all_confidences) else []
             
             formatted_kps = []
             for i, kp in enumerate(person_coords):
-                # Extraemos la confianza real. Si falla por algo, ponemos 0.0
                 conf = float(person_confs[i]) if i < len(person_confs) else 0.0
-                
                 formatted_kps.append({
                     "id": i, 
                     "name": f"kp_{i}", 
                     "x": float(kp[0]), 
                     "y": float(kp[1]), 
-                    "confidence": conf  # <-- AHORA ASIGNA LA CONFIANZA REAL DE YOLO
+                    "confidence": conf
                 })
             
             persons_formatted.append({
@@ -119,33 +105,214 @@ class PoseDetectionImageView(APIView):
             "persons": persons_formatted
         }
 
-        # =================================================================
-        # NUEVO: GUARDAR RESULTADOS EN UN ARCHIVO JSON Y EN LA BD
-        # =================================================================
+        # Guardar copia intermedia del JSON en los reportes internos del back
         try:
-            # 1. Crear la carpeta 'reports' si no existe
             reports_dir = os.path.join(settings.MEDIA_ROOT, 'reports')
             os.makedirs(reports_dir, exist_ok=True)
+            json_filename = f"keypoints_image_{image_record.pk}.json"
             
-            # 2. Generar nombre de archivo (ej: keypoints_image_15_ab12cd.json)
-            json_filename = f"keypoints_image_{image_record.pk}_{uuid.uuid4().hex[:6]}.json"
-            json_path = os.path.join(reports_dir, json_filename)
-            
-            # 3. Guardar el archivo físicamente en el disco
-            with open(json_path, 'w', encoding='utf-8') as json_file:
+            with open(os.path.join(reports_dir, json_filename), 'w', encoding='utf-8') as json_file:
                 json.dump(response_data, json_file, ensure_ascii=False, indent=4)
                 
-            # 4. Guardar la ruta relativa en nuestra nueva columna de la BD
             image_record.rutaArchivoJson = f"reports/{json_filename}"
             image_record.save()
-                
         except Exception as e:
-            # Si falla la creación del archivo, imprimimos el error pero no 
-            # tumbamos la respuesta (el frontend igual recibirá la data).
-            print(f"Advertencia: No se pudo guardar el JSON de la imagen {image_record.pk}: {str(e)}")
-        # =================================================================
+            print(f"Advertencia: No se pudo guardar el reporte JSON interno: {str(e)}")
 
         out_serializer = PoseDetectionResponseSerializer(data=response_data)
         out_serializer.is_valid(raise_exception=True)
-        
         return Response(out_serializer.validated_data, status=status.HTTP_200_OK)
+
+
+class SavePoseToDiskView(APIView):
+    """
+    POST /api/analysis/pose/image/<image_id>/save-to-disk/
+    Endpoint exclusivo que se ejecuta al presionar "Guardar Resultados" desde la UI.
+    """
+    def post(self, request, image_id, *args, **kwargs):
+        try:
+            image_record = ImageUpload.objects.get(pk=image_id)
+        except ImageUpload.DoesNotExist:
+            return Response({"error": "Registro no encontrado en BD"}, status=status.HTTP_404_NOT_FOUND)
+
+        target_path = request.data.get('target_path')
+        results_payload = request.data.get('results')
+
+        if not target_path or not results_payload:
+            return Response({"error": "Faltan parámetros físicos ('target_path' o 'results')"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # Normalizar ruta para evitar problemas con las barras (\) en Windows
+            target_path = os.path.normpath(target_path)
+            
+            # 1. Asegurar la creación de la subcarpeta 'Imagen'
+            dir_imagen = os.path.join(target_path, "Imagen")
+            os.makedirs(dir_imagen, exist_ok=True)
+            
+            # 2. Lógica incremental basada en la cantidad de archivos .json en la raíz
+            existing_files = [f for f in os.listdir(target_path) if f.endswith('.json')]
+            next_number = len(existing_files) + 1
+            file_name_base = f"{next_number:05d}" # Genera '00001', '00002', etc.
+            
+            # 3. Mover/Copiar la imagen procesada guardada en MEDIA_ROOT al dataset externo
+            source_image_path = os.path.join(settings.MEDIA_ROOT, image_record.rutaArchivoOriginal)
+            dest_image_path = os.path.join(dir_imagen, f"{file_name_base}.jpg")
+
+            if os.path.exists(source_image_path):
+                shutil.copy2(source_image_path, dest_image_path)
+            else:
+                return Response({"error": "El archivo procesado original no se encuentra en el servidor."}, status=status.HTTP_404_NOT_FOUND)
+            
+            # 4. Escribir el archivo JSON en la raíz de la carpeta seleccionada
+            dest_json_path = os.path.join(target_path, f"{file_name_base}.json")
+            with open(dest_json_path, 'w', encoding='utf-8') as json_file:
+                json.dump(results_payload, json_file, ensure_ascii=False, indent=4)
+                
+            return Response({
+                "success": True,
+                "message": f"Dataset persistido en disco exitosamente como {file_name_base}."
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "error": "Write Permission or System Error",
+                "message": f"No se pudo escribir en la ruta de red o disco local: {str(e)}"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+class ListLocalFilesView(APIView):
+    """
+    POST /api/analysis/pose/local-files/
+    Devuelve la lista de imágenes (.jpg, .png) que existen dentro de la subcarpeta 'Imagen' de la ruta dada.
+    """
+    def post(self, request, *args, **kwargs):
+        target_path = request.data.get('target_path')
+        if not target_path:
+            return Response({"error": "Ruta no proporcionada"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            target_path = os.path.normpath(target_path)
+            dir_imagen = os.path.join(target_path, "Imagen")
+            
+            if not os.path.exists(dir_imagen):
+                return Response([]) # Carpeta vacía o no existe
+                
+            files = sorted([f for f in os.listdir(dir_imagen) if f.endswith(('.jpg', '.jpeg', '.png'))])
+            # Devolvemos un formato amigable para el frontend
+            file_list = [{"id": f, "name": f} for f in files]
+            return Response(file_list, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class GetLocalFileDataView(APIView):
+    """
+    POST /api/analysis/pose/local-file-data/
+    Devuelve la imagen en Base64 y el contenido de su .json asociado.
+    Soporta tanto imágenes estáticas como fotogramas de video con JSONs stringificados.
+    """
+    def post(self, request, *args, **kwargs):
+        target_path = request.data.get('target_path')
+        file_name = request.data.get('file_name') # Ej: 00001.jpg o 00001_frame_001.jpg
+        
+        if not target_path or not file_name:
+            return Response({"error": "Faltan parámetros"}, status=status.HTTP_400_BAD_REQUEST)
+            
+        try:
+            target_path = os.path.normpath(target_path)
+            img_path = os.path.join(target_path, "Imagen", file_name)
+            
+            if not os.path.exists(img_path):
+                return Response({"error": "La imagen física no se encontró"}, status=status.HTTP_404_NOT_FOUND)
+                
+            # 1. Convertir imagen a Base64
+            with open(img_path, "rb") as img_file:
+                b64_string = base64.b64encode(img_file.read()).decode('utf-8')
+                
+            base_name = os.path.splitext(file_name)[0] # '00001' o '00001_frame_001'
+            json_data = None
+            
+            # =============================================================
+            # LÓGICA INTELIGENTE DE LECTURA DE JSON
+            # =============================================================
+            if "_frame_" in base_name:
+                # CASO A: Es un fotograma de video (Ej: 00001_frame_001)
+                video_base, frame_str = base_name.split("_frame_")
+                json_path = os.path.join(target_path, f"{video_base}.json")
+                frame_idx = int(frame_str) - 1 # _frame_001 -> index 0 del array
+                
+                if os.path.exists(json_path):
+                    with open(json_path, "r", encoding="utf-8") as jf:
+                        full_json = json.load(jf)
+                        
+                    # Si el JSON maestro vino como string, lo parseamos
+                    if isinstance(full_json, str):
+                        full_json = json.loads(full_json)
+                        
+                    # Buscar la lista de frames dentro del JSON del video
+                    frames_list = []
+                    if isinstance(full_json, dict):
+                        frames_list = full_json.get('keypoints_data') or full_json.get('keypoints') or full_json.get('frames') or full_json.get('data') or []
+                    elif isinstance(full_json, list):
+                        frames_list = full_json
+                        
+                    # Si la lista de frames vino como string, la parseamos
+                    if isinstance(frames_list, str):
+                        frames_list = json.loads(frames_list)
+                        
+                    # Extraer el fotograma específico
+                    if 0 <= frame_idx < len(frames_list):
+                        frame_info = frames_list[frame_idx]
+                        
+                        # Si el frame individual es string, lo parseamos
+                        if isinstance(frame_info, str):
+                            frame_info = json.loads(frame_info)
+                            
+                        raw_pts = []
+                        if isinstance(frame_info, dict):
+                            raw_pts = frame_info.get('keypoints_json') or frame_info.get('keypoints') or []
+                        elif isinstance(frame_info, list):
+                            raw_pts = frame_info
+                            
+                        # ¡AQUÍ ESTÁ LA MAGIA! Si raw_pts es texto, lo convertimos a lista
+                        if isinstance(raw_pts, str):
+                            try:
+                                raw_pts = json.loads(raw_pts)
+                            except Exception:
+                                raw_pts = []
+                        
+                        persons_list = []
+                        if raw_pts and isinstance(raw_pts, list):
+                            # Verificar si es un arreglo de arreglos (Multipersona)
+                            if len(raw_pts) > 0 and isinstance(raw_pts[0], list):
+                                for p_idx, pts in enumerate(raw_pts):
+                                    persons_list.append({"person_id": p_idx, "keypoints": pts})
+                            else:
+                                # Una sola persona
+                                persons_list.append({"person_id": 0, "keypoints": raw_pts})
+                                
+                        # Evitamos usar .get() si full_json es una lista
+                        modelo_usado = "YOLOv8-pose (Video)"
+                        if isinstance(full_json, dict):
+                            modelo_usado = full_json.get("model_used", "YOLOv8-pose (Video)")
+                                
+                        # Construir el objeto falso idéntico al de imágenes estáticas
+                        json_data = {
+                            "model_used": modelo_usado,
+                            "persons_detected": len(persons_list),
+                            "persons": persons_list
+                        }
+            else:
+                # CASO B: Es una imagen estática normal (Ej: 00001.json)
+                json_path = os.path.join(target_path, f"{base_name}.json")
+                if os.path.exists(json_path):
+                    with open(json_path, "r", encoding="utf-8") as jf:
+                        json_data = json.load(jf)
+            # =============================================================
+                        
+            return Response({
+                "image_b64": f"data:image/jpeg;base64,{b64_string}",
+                "json_data": json_data
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
