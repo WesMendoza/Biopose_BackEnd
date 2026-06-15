@@ -4,6 +4,9 @@ import json
 import base64
 import uuid
 import shutil
+import zipfile  # NUEVO
+import io       # NUEVO
+from django.http import HttpResponse # NUEVO
 from django.conf import settings
 from django.utils import timezone
 from rest_framework.views import APIView
@@ -127,7 +130,7 @@ class PoseDetectionImageView(APIView):
 class SavePoseToDiskView(APIView):
     """
     POST /api/analysis/pose/image/<image_id>/save-to-disk/
-    Endpoint exclusivo que se ejecuta al presionar "Guardar Resultados" desde la UI.
+    Genera el ZIP y luego elimina los archivos temporales del servidor de AWS.
     """
     def post(self, request, image_id, *args, **kwargs):
         try:
@@ -135,48 +138,61 @@ class SavePoseToDiskView(APIView):
         except ImageUpload.DoesNotExist:
             return Response({"error": "Registro no encontrado en BD"}, status=status.HTTP_404_NOT_FOUND)
 
-        target_path = request.data.get('target_path')
         results_payload = request.data.get('results')
 
-        if not target_path or not results_payload:
-            return Response({"error": "Faltan parámetros físicos ('target_path' o 'results')"}, status=status.HTTP_400_BAD_REQUEST)
+        if not results_payload:
+            return Response({"error": "Faltan los resultados JSON ('results')"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            # Normalizar ruta para evitar problemas con las barras (\) en Windows
-            target_path = os.path.normpath(target_path)
+            # 1. Crear un buffer en memoria para el ZIP
+            zip_buffer = io.BytesIO()
             
-            # 1. Asegurar la creación de la subcarpeta 'Imagen'
-            dir_imagen = os.path.join(target_path, "Imagen")
-            os.makedirs(dir_imagen, exist_ok=True)
+            # Buscamos la ruta física exacta de la imagen subida
+            source_image_path = os.path.join(settings.MEDIA_ROOT, str(image_record.rutaArchivoOriginal))
             
-            # 2. Lógica incremental basada en la cantidad de archivos .json en la raíz
-            existing_files = [f for f in os.listdir(target_path) if f.endswith('.json')]
-            next_number = len(existing_files) + 1
-            file_name_base = f"{next_number:05d}" # Genera '00001', '00002', etc.
-            
-            # 3. Mover/Copiar la imagen procesada guardada en MEDIA_ROOT al dataset externo
-            source_image_path = os.path.join(settings.MEDIA_ROOT, image_record.rutaArchivoOriginal)
-            dest_image_path = os.path.join(dir_imagen, f"{file_name_base}.jpg")
-
-            if os.path.exists(source_image_path):
-                shutil.copy2(source_image_path, dest_image_path)
-            else:
-                return Response({"error": "El archivo procesado original no se encuentra en el servidor."}, status=status.HTTP_404_NOT_FOUND)
-            
-            # 4. Escribir el archivo JSON en la raíz de la carpeta seleccionada
-            dest_json_path = os.path.join(target_path, f"{file_name_base}.json")
-            with open(dest_json_path, 'w', encoding='utf-8') as json_file:
-                json.dump(results_payload, json_file, ensure_ascii=False, indent=4)
+            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                # 2. Guardar el JSON en la raíz del ZIP
+                json_string = json.dumps(results_payload, ensure_ascii=False, indent=4)
+                zip_file.writestr("00001.json", json_string)
                 
-            return Response({
-                "success": True,
-                "message": f"Dataset persistido en disco exitosamente como {file_name_base}."
-            }, status=status.HTTP_200_OK)
+                # 3. Empacar la imagen original dentro de "Imagen/"
+                if os.path.exists(source_image_path):
+                    zip_file.write(source_image_path, arcname="Imagen/00001.jpg")
+                else:
+                    return Response({"error": "La imagen física no se encuentra en el servidor."}, status=status.HTTP_404_NOT_FOUND)
+            
+            # 4. === ELIMINACIÓN DE ARCHIVOS FÍSICOS (OPCIÓN 1) ===
+            
+            # Borrar imagen original (uploads)
+            if image_record.rutaArchivoOriginal and os.path.exists(source_image_path):
+                os.remove(source_image_path)
+            
+            # Borrar imagen procesada con el esqueleto dibujado (processed)
+            if image_record.rutaArchivoProcesado:
+                proc_path = os.path.join(settings.MEDIA_ROOT, str(image_record.rutaArchivoProcesado))
+                if os.path.exists(proc_path):
+                    os.remove(proc_path)
+                    
+            # Borrar el reporte JSON temporal (reports)
+            if image_record.rutaArchivoJson:
+                json_path = os.path.join(settings.MEDIA_ROOT, str(image_record.rutaArchivoJson))
+                if os.path.exists(json_path):
+                    os.remove(json_path)
+
+            # Opcional: Eliminar el registro de la BD para que no queden registros "fantasma"
+            image_record.delete() 
+
+            # 5. Enviar el archivo descargable
+            response = HttpResponse(zip_buffer.getvalue(), content_type='application/zip')
+            response['Content-Disposition'] = 'attachment; filename="Dataset_Imagen.zip"'
+            response['Access-Control-Expose-Headers'] = 'Content-Disposition'
+            
+            return response
 
         except Exception as e:
             return Response({
-                "error": "Write Permission or System Error",
-                "message": f"No se pudo escribir en la ruta de red o disco local: {str(e)}"
+                "error": "Error al generar ZIP",
+                "message": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 class ListLocalFilesView(APIView):
