@@ -189,6 +189,7 @@ CELERY_TIMEZONE = TIME_ZONE
 CORS_ALLOWED_ORIGINS = [
     "http://biopose-front.s3-website.us-east-2.amazonaws.com",
     "http://16.58.233.154",
+    "http://localhost:5173",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -196,4 +197,5 @@ CORS_ALLOW_CREDENTIALS = True
 CSRF_TRUSTED_ORIGINS = [
     "http://biopose-front.s3-website.us-east-2.amazonaws.com",
     "http://16.58.233.154",
+    "http://localhost:5173",
 ]
