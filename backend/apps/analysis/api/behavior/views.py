@@ -2,6 +2,9 @@ import json
 import os
 import shutil
 import cv2
+import zipfile
+import io
+from django.http import HttpResponse
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -147,83 +150,84 @@ class VideoKeypointsJsonView(APIView):
 class SaveVideoToDiskView(APIView):
     """
     POST /api/analysis/videos/<video_id>/save-to-disk/
-    Genera los fotogramas 'al vuelo' desde el video original y guarda el JSON 
-    modificado por el usuario en la ruta destino.
+    Genera un archivo ZIP en memoria RAM extrayendo los fotogramas del video al vuelo,
+    agrega el JSON con los puntos y elimina los archivos del servidor para ahorrar espacio.
     """
     def post(self, request, video_id):
         video_upload = get_object_or_404(VideoUpload, idVideoUpload=video_id)
         
-        target_path = request.data.get('target_path')
-        # ¡NUEVO!: Recibimos el JSON con los puntos editados por el usuario
+        # Recibimos el JSON modificado por el usuario desde React
         results_payload = request.data.get('results') 
 
-        if not target_path:
-            return Response({"error": "Falta la ruta de guardado (target_path)."}, status=status.HTTP_400_BAD_REQUEST)
+        if not results_payload:
+            return Response({"error": "Faltan los resultados (results)."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            target_path = os.path.normpath(target_path)
-            dir_imagen = os.path.join(target_path, "Imagen")
-            os.makedirs(dir_imagen, exist_ok=True)
-            
-            # Nombre incremental (ej: 00001, 00002)
-            existing_jsons = [f for f in os.listdir(target_path) if f.endswith('.json')]
-            next_number = len(existing_jsons) + 1
-            video_base_name = f"{next_number:05d}"
-            
-            # 1. GUARDAR EL JSON EDITADO EN LA CARPETA SELECCIONADA
-            dest_json_path = os.path.join(target_path, f"{video_base_name}.json")
-            
-            if results_payload:
-                # Escribimos el JSON que tú modificaste en React directamente en el disco
-                with open(dest_json_path, 'w', encoding='utf-8') as json_file:
-                    json.dump(results_payload, json_file, ensure_ascii=False, indent=4)
-                json_data = results_payload # Usamos este mismo para leer los tiempos
-            else:
-                # Fallback por si acaso: Si no envían edits, copiamos el original
-                try:
-                    reporte = AnalysisReport.objects.get(idVideoUpload=video_upload)
-                    source_json_path = _resolve_media_path(reporte.rutaJsonKeypoints)
-                    if source_json_path and os.path.exists(source_json_path):
-                        shutil.copy2(source_json_path, dest_json_path)
-                        with open(source_json_path, 'r', encoding='utf-8') as f:
-                            json_data = json.load(f)
-                    else:
-                        raise Exception()
-                except Exception:
-                    return Response({"error": "No hay datos JSON disponibles para guardar."}, status=status.HTTP_404_NOT_FOUND)
-
-            # 2. EXTRAER FOTOGRAMAS DEL VIDEO ORIGINAL AL VUELO
+            # 1. Crear un "archivo" en la memoria RAM
+            zip_buffer = io.BytesIO()
             video_file_path = _resolve_media_path(video_upload.rutaArchivo)
+            
             if not video_file_path or not os.path.exists(video_file_path):
-                return Response({"error": "El video original no se encuentra."}, status=status.HTTP_404_NOT_FOUND)
-            
-            # Detectar en qué nodo están guardados los frames
-            frames_list = []
-            if isinstance(json_data, dict):
-                frames_list = json_data.get('keypoints_data') or json_data.get('keypoints') or json_data.get('frames') or json_data.get('data') or []
-            elif isinstance(json_data, list):
-                frames_list = json_data
+                return Response({"error": "El video original no se encuentra en el servidor."}, status=status.HTTP_404_NOT_FOUND)
 
-            # Abrir el video y capturar los frames exactos
-            cap = cv2.VideoCapture(video_file_path)
-            
-            for idx, frame_info in enumerate(frames_list):
-                timestamp_sec = frame_info.get('timestamp_sec', frame_info.get('time', 0))
+            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
                 
-                cap.set(cv2.CAP_PROP_POS_MSEC, float(timestamp_sec) * 1000)
-                success, frame = cap.read()
+                # 2. Escribir el JSON en la raíz del ZIP (ej: 00001.json)
+                json_string = json.dumps(results_payload, ensure_ascii=False, indent=4)
+                zip_file.writestr("00001.json", json_string)
                 
-                if success:
-                    dest_name = f"{video_base_name}_frame_{idx+1:03d}.jpg"
-                    dest_path = os.path.join(dir_imagen, dest_name)
-                    cv2.imwrite(dest_path, frame)
+                # 3. Leer el video y extraer fotogramas al vuelo
+                cap = cv2.VideoCapture(video_file_path)
+                
+                # Detectar estructura del JSON
+                frames_list = []
+                if isinstance(results_payload, dict):
+                    frames_list = results_payload.get('keypoints_data') or results_payload.get('keypoints') or results_payload.get('frames') or results_payload.get('data') or []
+                elif isinstance(results_payload, list):
+                    frames_list = results_payload
+
+                for idx, frame_info in enumerate(frames_list):
+                    timestamp_sec = frame_info.get('timestamp_sec', frame_info.get('time', 0))
                     
-            cap.release()
+                    # Nos movemos al segundo exacto del frame
+                    cap.set(cv2.CAP_PROP_POS_MSEC, float(timestamp_sec) * 1000)
+                    success, frame = cap.read()
+                    
+                    if success:
+                        # ¡MAGIA! Convertimos la imagen de OpenCV a bytes en memoria sin tocar el disco
+                        ret, buffer = cv2.imencode('.jpg', frame)
+                        if ret:
+                            # Escribimos los bytes directamente dentro de la carpeta "Imagen/" del ZIP
+                            dest_name = f"Imagen/00001_frame_{idx+1:03d}.jpg"
+                            zip_file.writestr(dest_name, buffer.tobytes())
+                            
+                cap.release()
 
-            return Response({
-                "success": True, 
-                "message": f"Colección exportada exitosamente como {video_base_name}"
-            }, status=status.HTTP_200_OK)
+            # 4. === ELIMINACIÓN DE ARCHIVOS FÍSICOS (Limpieza de AWS) ===
+            
+            # Borrar video original subido
+            if video_upload.rutaArchivo and os.path.exists(video_file_path):
+                os.remove(video_file_path)
+            
+            # Borrar el reporte JSON generado internamente por Celery
+            try:
+                reporte = AnalysisReport.objects.get(idVideoUpload=video_upload)
+                report_path = _resolve_media_path(reporte.rutaJsonKeypoints)
+                if report_path and os.path.exists(report_path):
+                    os.remove(report_path)
+                reporte.delete() # Borramos el registro del reporte
+            except AnalysisReport.DoesNotExist:
+                pass
+            
+            # Borrar el registro del video para dejar BD limpia
+            video_upload.delete()
+
+            # 5. Enviar el ZIP resultante al usuario
+            response = HttpResponse(zip_buffer.getvalue(), content_type='application/zip')
+            response['Content-Disposition'] = f'attachment; filename="Dataset_VideoFrames.zip"'
+            response['Access-Control-Expose-Headers'] = 'Content-Disposition'
+            
+            return response
             
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": "Error al generar el ZIP", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
