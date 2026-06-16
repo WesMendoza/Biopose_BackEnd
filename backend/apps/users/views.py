@@ -2,6 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny 
 from rest_framework.decorators import action
+from apps.authentication.utils import hash_password
 from django.db.models import F
 
 from .models import Users
@@ -101,12 +102,15 @@ class UsersViewSet(viewsets.ModelViewSet):
         """
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
-            self.perform_create(serializer)
+            password_plana = serializer.validated_data.get('password')
+            password_hasheada = hash_password(password_plana)
+            user = serializer.save(password=password_hasheada)
             return Response({
                 "codigo": status.HTTP_201_CREATED,
                 "mensaje": "Usuario creado exitosamente",
-                "detalle": serializer.data
+                "detalle": self.get_serializer(user).data
             }, status=status.HTTP_201_CREATED)
+            
         return Response({
             "codigo": status.HTTP_400_BAD_REQUEST,
             "mensaje": "Error de validación",
