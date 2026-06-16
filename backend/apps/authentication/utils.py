@@ -14,18 +14,28 @@ def hash_password(password):
 
 def generate_jwt(user):
     # Forzamos la búsqueda usando el idUsuario directamente
-    # y asegurándonos de traer el idEmpresa asociado a la empresa 5
+    # y asegurándonos de traer el idEmpresa asociado a la empresa activa
     empresa_usuario = EmpresaUsuarioRol.objects.filter(
         idUsuario__idUsuario=user.idUsuario, 
         estado='A'
-    ).first()
+    ).select_related('idRol').first() # select_related optimiza la consulta cruzada con la tabla Rol
     
-    id_empresa = empresa_usuario.idEmpresa_id if empresa_usuario else None
+    id_empresa = None
+    id_rol = None
+    nombre_rol = None
+
+    if empresa_usuario:
+        id_empresa = empresa_usuario.idEmpresa_id
+        id_rol = empresa_usuario.idRol_id
+        if empresa_usuario.idRol:
+            nombre_rol = empresa_usuario.idRol.nombreRol
 
     payload = {
         'idUsuario': user.idUsuario,
         'correo': user.correo,
         'idEmpresa': id_empresa, 
+        'idRol': id_rol,             
+        'nombreRol': nombre_rol,     
         'exp': datetime.utcnow() + timedelta(hours=24),
         'iat': datetime.utcnow()
     }
@@ -57,9 +67,11 @@ class CustomJWTAuthentication(authentication.BaseAuthentication):
         try:
             user = Users.objects.get(idUsuario=payload.get('idUsuario'))
             
-            # BONUS: Pegamos el idEmpresa extraído del token al objeto user.
+            # BONUS: Pegamos los datos extraídos del token al objeto user.
             # Así, en cualquier View de Django puedes usar: request.user.idEmpresa_jwt
             user.idEmpresa_jwt = payload.get('idEmpresa')
+            user.idRol_jwt = payload.get('idRol')              # <--- Disponible en Django
+            user.nombreRol_jwt = payload.get('nombreRol')      # <--- Disponible en Django
             
         except Users.DoesNotExist:
             raise exceptions.AuthenticationFailed('Usuario no encontrado')
