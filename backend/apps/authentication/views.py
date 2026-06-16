@@ -14,6 +14,7 @@ class AuthViewSet(viewsets.ViewSet):
     Rutas de autenticación
     """
     permission_classes = [AllowAny]
+    
     #Metodo Login, recibe correo y contraseña, valida y retorna token JWT
     @action(detail=False, methods=['post'],permission_classes=[AllowAny])
     def login(self, request):
@@ -49,12 +50,30 @@ class AuthViewSet(viewsets.ViewSet):
             "detalle": serializer.errors
         }, status=status.HTTP_400_BAD_REQUEST)
     
+    # === NUEVO ENDPOINT PÚBLICO ===
+    @action(detail=False, methods=['get'], permission_classes=[AllowAny], url_path='empresas-publicas')
+    def empresas_publicas(self, request):
+        """
+        Retorna la lista de empresas activas para que se muestren en el Combo del Register.
+        """
+        from apps.gestionEmpresas.models import Empresa
+        empresas = Empresa.objects.filter(estado='A').values('codigoEmpresa', 'nombreEmpresa')
+        return Response({
+            "codigo": 200,
+            "mensaje": "Lista de empresas",
+            "detalle": list(empresas)
+        }, status=status.HTTP_200_OK)
+
     #Metodo Register, recibe datos del usuario, valida y crea una nueva cuenta
     @action(detail=False, methods=['post'],permission_classes=[AllowAny])
     def registerAccount(self, request):
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
             params = serializer.validated_data
+            
+            # Extraemos el código de la empresa enviado desde React
+            codigo_empresa = request.data.get('codigoEmpresa')
+
             if Users.objects.filter(correo=params['correo']).exists():
                 return Response({
                     "codigo": 400,
@@ -70,6 +89,28 @@ class AuthViewSet(viewsets.ViewSet):
 
             hashed_pass = hash_password(params['password'])
             user = serializer.save(password=hashed_pass, estado='A')
+
+            # === NUEVA LÓGICA DE ASIGNACIÓN A LA EMPRESA ===
+            if codigo_empresa:
+                try:
+                    from apps.gestionEmpresas.models import Empresa, Rol, EmpresaUsuarioRol
+                    empresa = Empresa.objects.get(codigoEmpresa=codigo_empresa, estado='A')
+                    rol_invitado = Rol.objects.get(idEmpresa=empresa, nombreRol='Invitado', estado='A')
+                    
+                    # Lo vinculamos como invitado a la empresa seleccionada
+                    EmpresaUsuarioRol.objects.create(
+                        idEmpresa=empresa,
+                        idUsuario=user,
+                        idRol=rol_invitado,
+                        estado='A',
+                        usuarioCreacion='RegistroWeb',
+                        usuarioModificacion='RegistroWeb'
+                    )
+                except Exception as e:
+                    # Si falla la asignación (ej. no existe el rol invitado), podemos ignorarlo para no romper el registro del usuario.
+                    pass
+            # ===============================================
+
             return Response({
                 "codigo": 201,
                 "mensaje": "Cuenta creada exitosamente",
