@@ -2,6 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny 
 from rest_framework.decorators import action
+from django.db.models import F
 
 from .models import Users
 from .serializers import UsersSerializer
@@ -31,8 +32,9 @@ class UsersViewSet(viewsets.ModelViewSet):
         """
         queryset = super().get_queryset()
         
-        empresa_id = self.request.query_params.get('empresa_id', None)
-        rol_id = self.request.query_params.get('rol_id', None)
+        # Aceptamos tanto 'idEmpresa' (React) como 'empresa_id' (Legacy)
+        empresa_id = self.request.query_params.get('idEmpresa') or self.request.query_params.get('empresa_id')
+        rol_id = self.request.query_params.get('idRol') or self.request.query_params.get('rol_id')
 
         if empresa_id or rol_id:
             from apps.gestionEmpresas.models import EmpresaUsuarioRol
@@ -44,9 +46,16 @@ class UsersViewSet(viewsets.ModelViewSet):
             
             # Buscamos los IDs de usuarios que pertenecen a esta empresa / rol
             usuarios_validos = EmpresaUsuarioRol.objects.filter(**filtros).values_list('idUsuario', flat=True)
-            queryset = queryset.filter(idUsuario__in=usuarios_validos).distinct()
+            queryset = queryset.filter(idUsuario__in=usuarios_validos)
 
-        return queryset
+            # MAGIA PARA EL FRONTEND: Anotamos el idRol y el nombreRol para que React no tenga que cruzarlos
+            if empresa_id:
+                queryset = queryset.annotate(
+                    idRol_anotado=F('empresausuariorol__idRol'),
+                    nombreRol_anotado=F('empresausuariorol__idRol__nombreRol') # Asumiendo que tu Foreign Key se llama idRol y apunta al modelo Rol que tiene 'nombreRol'
+                )
+
+        return queryset.distinct()
 
     def list(self, request, *args, **kwargs):
         """
@@ -54,11 +63,22 @@ class UsersViewSet(viewsets.ModelViewSet):
         Obtiene la lista de todos los usuarios (aplica filtros de get_queryset).
         """
         queryset = self.filter_queryset(self.get_queryset())
-        serializer = self.get_serializer(queryset, many=True)
+        
+        # En lugar de usar el serializador estándar, armamos una respuesta enriquecida
+        # para enviar los roles anotados si existen
+        detalles = []
+        for user in queryset:
+            user_data = self.get_serializer(user).data
+            # Si anotamos el rol, lo inyectamos en el JSON
+            if hasattr(user, 'idRol_anotado'):
+                user_data['idRol'] = user.idRol_anotado
+                user_data['nombreRol'] = user.nombreRol_anotado
+            detalles.append(user_data)
+
         return Response({
             "codigo": status.HTTP_200_OK,
             "mensaje": "Lista de usuarios obtenida exitosamente",
-            "detalle": serializer.data
+            "detalle": detalles
         })
 
     def retrieve(self, request, *args, **kwargs):
@@ -121,7 +141,7 @@ class UsersViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['put', 'patch'], url_path='actualizarPorCedula/(?P<cedula>[^/.]+)')
     def update_by_cedula(self, request, cedula=None):
         """
-        [PUT/PATCH] /users/actualizar-por-cedula/{cedula}/
+        [PUT/PATCH] /users/actualizarPorCedula/{cedula}/
         Actualiza los datos de un usuario buscándolo y validándolo a través de su cédula.
         """
         try:
@@ -156,7 +176,7 @@ class UsersViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['delete'], url_path='eliminar/(?P<cedula>[^/.]+)')
     def delete_by_cedula(self, request, cedula=None):
         """
-        [DELETE] /users/eliminar-por-cedula/{cedula}/
+        [DELETE] /users/eliminar/{cedula}/
         Realiza un borrado lógico del usuario buscando por su cédula, cambiando su estado a inactivo ('N').
         """
         try:
@@ -173,9 +193,12 @@ class UsersViewSet(viewsets.ModelViewSet):
         user.estado = 'N'
         user.save()
 
+        # Opcional: También dar de baja su asignación de rol en la empresa
+        from apps.gestionEmpresas.models import EmpresaUsuarioRol
+        EmpresaUsuarioRol.objects.filter(idUsuario=user).update(estado='N')
+
         return Response({
             "codigo": status.HTTP_200_OK,
             "mensaje": "Usuario eliminado exitosamente.",
             "detalle": None
         }, status=status.HTTP_200_OK)
-
