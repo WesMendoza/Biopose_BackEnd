@@ -65,63 +65,77 @@ class AuthViewSet(viewsets.ViewSet):
         }, status=status.HTTP_200_OK)
 
     #Metodo Register, recibe datos del usuario, valida y crea una nueva cuenta
-    @action(detail=False, methods=['post'],permission_classes=[AllowAny])
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
     def registerAccount(self, request):
         serializer = RegisterSerializer(data=request.data)
-        if serializer.is_valid():
-            params = serializer.validated_data
+        if not serializer.is_valid():
+            return Response({"codigo": 400, "mensaje": "Error de validación", "detalle": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
             
-            # Extraemos el código de la empresa enviado desde React
-            codigo_empresa = request.data.get('codigoEmpresa')
+        params = serializer.validated_data
+        
+        # Datos extraídos del React
+        codigo_empresa = request.data.get('codigoEmpresa')
+        is_crear_empresa = request.data.get('isCrearEmpresa', False)
+        nombre_empresa = request.data.get('nombreEmpresa')
+        ruc_empresa = request.data.get('rucEmpresa')
 
-            if Users.objects.filter(correo=params['correo']).exists():
-                return Response({
-                    "codigo": 400,
-                    "mensaje": "Error en registro",
-                    "detalle": "El correo ya está en uso."
-                }, status=status.HTTP_400_BAD_REQUEST)
-            if 'cedula' in params and Users.objects.filter(cedula=params['cedula']).exists():
-                return Response({
-                    "codigo": 400,
-                    "mensaje": "Error en registro",
-                    "detalle": "La cédula ya está registrada."
-                }, status=status.HTTP_400_BAD_REQUEST)
+        # 1. Validaciones previas del usuario
+        if Users.objects.filter(correo=params['correo']).exists():
+            return Response({"codigo": 400, "mensaje": "Error en registro", "detalle": "El correo ya está en uso."}, status=status.HTTP_400_BAD_REQUEST)
+        if 'cedula' in params and Users.objects.filter(cedula=params['cedula']).exists():
+            return Response({"codigo": 400, "mensaje": "Error en registro", "detalle": "La cédula ya está registrada."}, status=status.HTTP_400_BAD_REQUEST)
 
-            hashed_pass = hash_password(params['password'])
-            user = serializer.save(password=hashed_pass, estado='A')
+        # 2. Validaciones previas de la nueva empresa
+        from apps.gestionEmpresas.models import Empresa, Rol, EmpresaUsuarioRol
+        if is_crear_empresa:
+            if not nombre_empresa or not ruc_empresa:
+                return Response({"codigo": 400, "mensaje": "Faltan datos", "detalle": "Nombre y RUC de la empresa son obligatorios."}, status=status.HTTP_400_BAD_REQUEST)
+            if Empresa.objects.filter(ruc=ruc_empresa).exists():
+                return Response({"codigo": 400, "mensaje": "RUC duplicado", "detalle": "Ya existe una empresa registrada con ese RUC."}, status=status.HTTP_400_BAD_REQUEST)
 
-            # === NUEVA LÓGICA DE ASIGNACIÓN A LA EMPRESA ===
-            if codigo_empresa:
-                try:
-                    from apps.gestionEmpresas.models import Empresa, Rol, EmpresaUsuarioRol
-                    empresa = Empresa.objects.get(codigoEmpresa=codigo_empresa, estado='A')
-                    rol_invitado = Rol.objects.get(idEmpresa=empresa, nombreRol='Invitado', estado='A')
-                    
-                    # Lo vinculamos como invitado a la empresa seleccionada
-                    EmpresaUsuarioRol.objects.create(
-                        idEmpresa=empresa,
-                        idUsuario=user,
-                        idRol=rol_invitado,
-                        estado='A',
-                        usuarioCreacion='RegistroWeb',
-                        usuarioModificacion='RegistroWeb'
-                    )
-                except Exception as e:
-                    # Si falla la asignación (ej. no existe el rol invitado), podemos ignorarlo para no romper el registro del usuario.
-                    pass
-            # ===============================================
+        # 3. Crear el Usuario
+        hashed_pass = hash_password(params['password'])
+        user = serializer.save(password=hashed_pass, estado='A')
 
-            return Response({
-                "codigo": 201,
-                "mensaje": "Cuenta creada exitosamente",
-                "detalle": UsersSerializer(user).data
-            }, status=status.HTTP_201_CREATED)
-            
+        # 4. Lógica de Empresa (SaaS Autoservicio)
+        try:
+            if is_crear_empresa:
+                # OPCIÓN A: Crea su propia empresa y se vuelve el ADMINISTRADOR
+                empresa = Empresa.objects.create(
+                    nombreEmpresa=nombre_empresa,
+                    ruc=ruc_empresa,
+                    estado='A',
+                    usuarioCreacion='RegistroWeb',
+                    usuarioModificacion='RegistroWeb'
+                )
+                empresa.codigoEmpresa = f"EMP{empresa.idEmpresa:03d}"
+                empresa.save(update_fields=['codigoEmpresa'])
+
+                # Creamos los roles base de esa nueva empresa
+                rol_admin = Rol.objects.create(idEmpresa=empresa, nombreRol='Administrador', estado='A', usuarioCreacion='RegistroWeb', usuarioModificacion='RegistroWeb')
+                Rol.objects.create(idEmpresa=empresa, nombreRol='Invitado', estado='A', usuarioCreacion='RegistroWeb', usuarioModificacion='RegistroWeb')
+
+                # Lo asignamos como Admin
+                EmpresaUsuarioRol.objects.create(
+                    idEmpresa=empresa, idUsuario=user, idRol=rol_admin, estado='A',
+                    usuarioCreacion='RegistroWeb', usuarioModificacion='RegistroWeb'
+                )
+            elif codigo_empresa:
+                # OPCIÓN B: Se une a una empresa existente como INVITADO
+                empresa = Empresa.objects.get(codigoEmpresa=codigo_empresa, estado='A')
+                rol_invitado = Rol.objects.get(idEmpresa=empresa, nombreRol='Invitado', estado='A')
+                
+                EmpresaUsuarioRol.objects.create(
+                    idEmpresa=empresa, idUsuario=user, idRol=rol_invitado, estado='A',
+                    usuarioCreacion='RegistroWeb', usuarioModificacion='RegistroWeb'
+                )
+        except Exception as e:
+            # Capturamos el error por si la tabla pivote falla, pero el usuario ya fue creado.
+            pass
+
         return Response({
-            "codigo": 400,
-            "mensaje": "Error de validación",
-            "detalle": serializer.errors
-        }, status=status.HTTP_400_BAD_REQUEST)
+            "codigo": 201, "mensaje": "Cuenta creada exitosamente", "detalle": UsersSerializer(user).data
+        }, status=status.HTTP_201_CREATED)
 
     #Metodo para verificar si una cédula ya existe en la base de datos
     @action(detail=False, methods=['post'], url_path='verifyCedula',permission_classes=[AllowAny])
