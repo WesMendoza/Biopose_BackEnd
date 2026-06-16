@@ -92,10 +92,34 @@ class EmpresaViewSet(BaseStandardViewSet):
     permission_classes = [IsAuthenticated]
     lookup_field = 'codigoEmpresa'  # Usar codigoEmpresa en lugar del 'id' en las URLs
 
+    def get_queryset(self):
+        """
+        Sobreescribe la consulta base para filtrar por la empresa del usuario
+        si se recibe el parámetro 'idEmpresa'.
+        Además, asegura que el usuario solo pueda ver las empresas a las que pertenece.
+        """
+        queryset = super().get_queryset()
+        id_empresa_param = self.request.query_params.get('idEmpresa')
+
+        # 1. Obtenemos las empresas a las que pertenece el usuario autenticado
+        empresas_del_usuario = EmpresaUsuarioRol.objects.filter(
+            idUsuario=self.request.user, 
+            estado='A'
+        ).values_list('idEmpresa', flat=True)
+
+        # 2. Filtramos el queryset para que SOLO devuelva las empresas del usuario
+        queryset = queryset.filter(idEmpresa__in=empresas_del_usuario)
+
+        # 3. Si el frontend manda un idEmpresa específico (para asegurar concordancia)
+        if id_empresa_param:
+            queryset = queryset.filter(idEmpresa=id_empresa_param)
+
+        return queryset
+
     def list(self, request, *args, **kwargs):
         """
         [GET] /api/gestionEmpresas/empresas/
-        1. Consultar Empresas (Todas las activas)
+        1. Consultar Empresas (Todas las activas vinculadas al usuario)
         """
         return super().list(request, *args, **kwargs)
 
