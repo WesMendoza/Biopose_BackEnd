@@ -4,9 +4,9 @@ import json
 import base64
 import uuid
 import shutil
-import zipfile  # NUEVO
-import io       # NUEVO
-from django.http import HttpResponse # NUEVO
+import zipfile
+import io
+from django.http import HttpResponse
 from django.conf import settings
 from django.utils import timezone
 from rest_framework.views import APIView
@@ -130,7 +130,7 @@ class PoseDetectionImageView(APIView):
 class SavePoseToDiskView(APIView):
     """
     POST /api/analysis/pose/image/<image_id>/save-to-disk/
-    Genera el ZIP y luego elimina los archivos temporales del servidor de AWS.
+    Genera el ZIP de una SOLA IMAGEN y luego elimina los archivos temporales.
     """
     def post(self, request, image_id, *args, **kwargs):
         try:
@@ -144,47 +144,36 @@ class SavePoseToDiskView(APIView):
             return Response({"error": "Faltan los resultados JSON ('results')"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            # 1. Crear un buffer en memoria para el ZIP
             zip_buffer = io.BytesIO()
-            
-            # Buscamos la ruta física exacta de la imagen subida
             source_image_path = os.path.join(settings.MEDIA_ROOT, str(image_record.rutaArchivoOriginal))
             
             with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                # 2. Guardar el JSON en la raíz del ZIP
                 json_string = json.dumps(results_payload, ensure_ascii=False, indent=4)
-                zip_file.writestr("00001.json", json_string)
+                zip_file.writestr("0001.json", json_string)
                 
-                # 3. Empacar la imagen original dentro de "Imagen/"
                 if os.path.exists(source_image_path):
-                    zip_file.write(source_image_path, arcname="Imagen/00001.jpg")
+                    zip_file.write(source_image_path, arcname="Imagen/0001.jpg")
                 else:
                     return Response({"error": "La imagen física no se encuentra en el servidor."}, status=status.HTTP_404_NOT_FOUND)
             
-            # 4. === ELIMINACIÓN DE ARCHIVOS FÍSICOS (OPCIÓN 1) ===
-            
-            # Borrar imagen original (uploads)
+            # ELIMINACIÓN DE ARCHIVOS FÍSICOS
             if image_record.rutaArchivoOriginal and os.path.exists(source_image_path):
                 os.remove(source_image_path)
             
-            # Borrar imagen procesada con el esqueleto dibujado (processed)
             if image_record.rutaArchivoProcesado:
                 proc_path = os.path.join(settings.MEDIA_ROOT, str(image_record.rutaArchivoProcesado))
                 if os.path.exists(proc_path):
                     os.remove(proc_path)
                     
-            # Borrar el reporte JSON temporal (reports)
             if image_record.rutaArchivoJson:
                 json_path = os.path.join(settings.MEDIA_ROOT, str(image_record.rutaArchivoJson))
                 if os.path.exists(json_path):
                     os.remove(json_path)
 
-            # Opcional: Eliminar el registro de la BD para que no queden registros "fantasma"
             image_record.delete() 
 
-            # 5. Enviar el archivo descargable
             response = HttpResponse(zip_buffer.getvalue(), content_type='application/zip')
-            response['Content-Disposition'] = 'attachment; filename="Dataset_Imagen.zip"'
+            response['Content-Disposition'] = f'attachment; filename="Dataset_Imagen_{image_id}.zip"'
             response['Access-Control-Expose-Headers'] = 'Content-Disposition'
             
             return response
@@ -194,12 +183,74 @@ class SavePoseToDiskView(APIView):
                 "error": "Error al generar ZIP",
                 "message": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# ==========================================
+# NUEVA VISTA PARA EL BATCH (CARRITO)
+# ==========================================
+class SaveBatchImagesToDiskView(APIView):
+    """
+    POST /api/analysis/pose/batch/save-to-disk/
+    Recibe un LOTE (array) de imágenes procesadas y genera un solo archivo ZIP ordenado.
+    """
+    def post(self, request):
+        batch_data = request.data.get('batch', [])
         
+        if not batch_data or not isinstance(batch_data, list):
+            return Response({"error": "Se requiere un arreglo 'batch' con los datos de las imágenes."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            zip_buffer = io.BytesIO()
+            
+            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                for idx, item in enumerate(batch_data):
+                    image_id = item.get('imageId')
+                    results_payload = item.get('results')
+                    
+                    if not image_id or not results_payload:
+                        continue
+                        
+                    file_prefix = f"{(idx + 1):04d}"
+                    
+                    try:
+                        image_upload = ImageUpload.objects.get(pk=image_id)
+                        source_image_path = os.path.join(settings.MEDIA_ROOT, str(image_upload.rutaArchivoOriginal))
+                        
+                        if os.path.exists(source_image_path):
+                            # 1. Escribir imagen en el ZIP
+                            zip_file.write(source_image_path, arcname=f"Imagen/{file_prefix}.jpg")
+                            
+                            # 2. Escribir JSON en el ZIP
+                            json_string = json.dumps(results_payload, ensure_ascii=False, indent=4)
+                            zip_file.writestr(f"{file_prefix}.json", json_string)
+                            
+                            # 3. Limpiar servidor
+                            os.remove(source_image_path)
+                            
+                            if image_upload.rutaArchivoProcesado:
+                                proc_path = os.path.join(settings.MEDIA_ROOT, str(image_upload.rutaArchivoProcesado))
+                                if os.path.exists(proc_path): os.remove(proc_path)
+                                
+                            if image_upload.rutaArchivoJson:
+                                json_path = os.path.join(settings.MEDIA_ROOT, str(image_upload.rutaArchivoJson))
+                                if os.path.exists(json_path): os.remove(json_path)
+
+                            image_upload.delete()
+                            
+                    except ImageUpload.DoesNotExist:
+                        pass 
+
+            response = HttpResponse(zip_buffer.getvalue(), content_type='application/zip')
+            response['Content-Disposition'] = f'attachment; filename="Dataset_Lote_{len(batch_data)}_Imagenes.zip"'
+            response['Access-Control-Expose-Headers'] = 'Content-Disposition'
+            
+            return response
+            
+        except Exception as e:
+            return Response({"error": "Error al generar el ZIP por lotes", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 class ListLocalFilesView(APIView):
-    """
-    POST /api/analysis/pose/local-files/
-    Devuelve la lista de imágenes (.jpg, .png) que existen dentro de la subcarpeta 'Imagen' de la ruta dada.
-    """
+    # ... (Manten tu código original)
     def post(self, request, *args, **kwargs):
         target_path = request.data.get('target_path')
         if not target_path:
@@ -221,11 +272,7 @@ class ListLocalFilesView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class GetLocalFileDataView(APIView):
-    """
-    POST /api/analysis/pose/local-file-data/
-    Devuelve la imagen en Base64 y el contenido de su .json asociado.
-    Soporta tanto imágenes estáticas como fotogramas de video con JSONs stringificados.
-    """
+    # ... (Manten tu código original)
     def post(self, request, *args, **kwargs):
         target_path = request.data.get('target_path')
         file_name = request.data.get('file_name') # Ej: 00001.jpg o 00001_frame_001.jpg
