@@ -31,6 +31,8 @@ def generate_jwt(user):
             nombre_rol = empresa_usuario.idRol.nombreRol
 
     payload = {
+        'nombre': user.nombre,
+        'apellido': user.apellido,
         'idUsuario': user.idUsuario,
         'correo': user.correo,
         'idEmpresa': id_empresa, 
