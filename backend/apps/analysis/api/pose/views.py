@@ -94,12 +94,10 @@ class PoseDetectionImageView(APIView):
                 conf = float(person_confs[i]) if i < len(person_confs) else 0.0
                 formatted_kps.append({
                     "id": i, 
-                    # AQUÍ REEMPLAZAMOS EL kp_{i} POR EL DICCIONARIO
                     "name": KEYPOINT_NAMES.get(i, f"kp_{i}"), 
                     "x": float(kp[0]), 
                     "y": float(kp[1]), 
                     "confidence": conf,
-                    # AQUÍ AGREGAMOS EL COMENTARIO INFORMATIVO
                     "_comment_confidence": "El valor de la confianza es generado en el análisis inicial de la imagen y no cambia aunque modifiquemos los keypoints"
                 })
             
@@ -133,7 +131,11 @@ class PoseDetectionImageView(APIView):
 
         out_serializer = PoseDetectionResponseSerializer(data=response_data)
         out_serializer.is_valid(raise_exception=True)
-        return Response(out_serializer.validated_data, status=status.HTTP_200_OK)
+        
+        # ==========================================================
+        # SOLUCIÓN APLICADA: Devolvemos response_data directamente
+        # ==========================================================
+        return Response(response_data, status=status.HTTP_200_OK)
 
 
 class SavePoseToDiskView(APIView):
