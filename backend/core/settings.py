@@ -30,7 +30,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-default-key')
 DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
 # SE AGREGÓ LA URL DE S3 AQUÍ
-ALLOWED_HOSTS = ['16.58.233.154', 'localhost', '127.0.0.1', 'biopose-front.s3-website.us-east-2.amazonaws.com']
+ALLOWED_HOSTS = ['16.58.233.154.nip.io', 'localhost', '127.0.0.1', 'biopose-front.s3-website.us-east-2.amazonaws.com']
 
 
 # Application definition
@@ -188,7 +188,9 @@ CELERY_TIMEZONE = TIME_ZONE
 
 CORS_ALLOWED_ORIGINS = [
     "http://biopose-front.s3-website.us-east-2.amazonaws.com",
+    "https://biopose-front.s3-website.us-east-2.amazonaws.com",
     "http://16.58.233.154",
+    "https://16.58.233.154.nip.io",
     "http://localhost:5173",
 ]
 
@@ -196,6 +198,8 @@ CORS_ALLOW_CREDENTIALS = True
 
 CSRF_TRUSTED_ORIGINS = [
     "http://biopose-front.s3-website.us-east-2.amazonaws.com",
+    "https://biopose-front.s3-website.us-east-2.amazonaws.com",
     "http://16.58.233.154",
+    "https://16.58.233.154.nip.io",
     "http://localhost:5173",
 ]
