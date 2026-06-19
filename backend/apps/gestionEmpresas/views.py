@@ -1,8 +1,10 @@
+from apps.menuOpciones.models import MenuOpcion, RolOption
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
 from django.db import transaction
+from django.db.models import Q
 
 from .models import Empresa, Rol, EmpresaUsuarioRol
 from .serializers import (
@@ -169,13 +171,46 @@ class EmpresaViewSet(BaseStandardViewSet):
                 usuarioModificacion=user_identifier
             )
             
-            Rol.objects.create(
+            # ========================================================
+            # NUEVO: DARLE TODOS LOS PERMISOS AL ADMINISTRADOR
+            # ========================================================
+            todas_las_pantallas = MenuOpcion.objects.filter(estado='A')
+            
+            for pantalla in todas_las_pantallas:
+                RolOption.objects.create(
+                    idRol=rol_admin,
+                    idOption=pantalla,
+                    idEmpresa=empresa,
+                    estado='A',
+                    usuarioCreacion=user_identifier,
+                    usuarioModificacion=user_identifier
+                )
+            
+            rol_invitado = Rol.objects.create(
                 idEmpresa=empresa,
                 nombreRol='Invitado',
                 estado='A',
                 usuarioCreacion=user_identifier,
                 usuarioModificacion=user_identifier
             )
+
+            # ========================================================
+            # NUEVO: DARLE PERMISOS DE IA AL INVITADO
+            # ========================================================
+            pantallas_ia = MenuOpcion.objects.filter(
+                Q(ruta__icontains='/app/pose') | Q(ruta__icontains='/app/events'),
+                estado='A'
+            )
+            
+            for pantalla in pantallas_ia:
+                RolOption.objects.create(
+                    idRol=rol_invitado,
+                    idOption=pantalla,
+                    idEmpresa=empresa,
+                    estado='A',
+                    usuarioCreacion=user_identifier,
+                    usuarioModificacion=user_identifier
+                )
 
             # Asignar la empresa al usuario que la creó, con el rol de Administrador
             EmpresaUsuarioRol.objects.create(
@@ -318,9 +353,6 @@ class RolViewSet(BaseStandardViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        """
-        Retorna sólo los roles de la empresa a la que pertenece el usuario administrador.
-        """
         user_empresas = EmpresaUsuarioRol.objects.filter(
             idUsuario=self.request.user, estado='A', idRol__nombreRol='Administrador'
         ).values_list('idEmpresa', flat=True)
@@ -332,26 +364,22 @@ class RolViewSet(BaseStandardViewSet):
         ).exists()
 
     def list(self, request, *args, **kwargs):
-        """
-        [GET] /api/gestionEmpresas/roles/
-        Consultar Roles habilitados para la empresa del administrador logueado.
-        """
         return super().list(request, *args, **kwargs)
 
+    @transaction.atomic # Asegura que si falla algo, no se guarde a medias
     def create(self, request, *args, **kwargs):
         """
         [POST] /api/gestionEmpresas/roles/
-        Crear Rol (solo administradores pueden crear en su respectiva empresa)
+        Crear Rol y sus permisos (pantallas)
         """
         import copy
-        
-        # Permitir modificación de parámetros de entrada
         try:
             data = request.data.copy()
         except AttributeError:
             data = copy.deepcopy(request.data)
             
         idEmpresa = data.get('idEmpresa')
+        menus_permitidos = data.get('menus_permitidos', []) # <-- NUEVO: Capturamos las pantallas
 
         # Auto-detectar de qué empresa es administrador si no lo provee
         if not idEmpresa:
@@ -374,9 +402,27 @@ class RolViewSet(BaseStandardViewSet):
         serializer = self.get_serializer(data=data)
         if serializer.is_valid():
             self.perform_create(serializer)
+            rol_creado = serializer.instance # El rol que se acaba de guardar
+            user_identifier = str(getattr(request.user, 'idUsuario', 'Sistema'))
+            
+            # === NUEVO: GUARDAR PERMISOS EN LA TABLA INTERMEDIA ===
+            if isinstance(menus_permitidos, list):
+                for menu_id in menus_permitidos:
+                    try:
+                        opcion = MenuOpcion.objects.get(idOption=menu_id)
+                        RolOption.objects.create(
+                            idRol=rol_creado,
+                            idOption=opcion,
+                            idEmpresa_id=idEmpresa,
+                            usuarioCreacion=user_identifier,
+                            usuarioModificacion=user_identifier
+                        )
+                    except MenuOpcion.DoesNotExist:
+                        pass # Si mandaron un ID falso, lo ignoramos
+
             return Response({
                 "codigo": status.HTTP_201_CREATED,
-                "mensaje": "Registro creado exitosamente",
+                "mensaje": "Rol y permisos creados exitosamente",
                 "detalle": serializer.data
             }, status=status.HTTP_201_CREATED)
             
@@ -386,10 +432,11 @@ class RolViewSet(BaseStandardViewSet):
             "detalle": serializer.errors
         }, status=status.HTTP_400_BAD_REQUEST)
 
+    @transaction.atomic
     def update(self, request, *args, **kwargs):
         """
         [PUT/PATCH] /api/gestionEmpresas/roles/{id}/
-        Editar Rol (solo administrador de la empresa dueña del rol)
+        Editar Rol y actualizar sus permisos
         """
         rol = self.get_object()
         if not self._es_administrador(rol.idEmpresa_id):
@@ -399,7 +446,35 @@ class RolViewSet(BaseStandardViewSet):
                 "detalle": "No tiene permisos para editar este rol."
             }, status=status.HTTP_403_FORBIDDEN)
              
-        return super().update(request, *args, **kwargs)
+        # Ejecutamos el update normal de la tabla Rol (nombre, estado, etc.)
+        response = super().update(request, *args, **kwargs)
+        
+        # Si se actualizó correctamente, procesamos los permisos
+        if response.status_code == status.HTTP_200_OK:
+            menus_permitidos = request.data.get('menus_permitidos')
+            
+            # === NUEVO: ACTUALIZAR PERMISOS ===
+            if menus_permitidos is not None and isinstance(menus_permitidos, list):
+                user_identifier = str(getattr(request.user, 'idUsuario', 'Sistema'))
+                
+                # 1. Borramos físicamente todos los permisos anteriores de este rol
+                RolOption.objects.filter(idRol=rol).delete()
+                
+                # 2. Creamos los nuevos permisos seleccionados
+                for menu_id in menus_permitidos:
+                    try:
+                        opcion = MenuOpcion.objects.get(idOption=menu_id)
+                        RolOption.objects.create(
+                            idRol=rol,
+                            idOption=opcion,
+                            idEmpresa_id=rol.idEmpresa_id,
+                            usuarioCreacion=user_identifier,
+                            usuarioModificacion=user_identifier
+                        )
+                    except MenuOpcion.DoesNotExist:
+                        pass
+        
+        return response
 
     def destroy(self, request, *args, **kwargs):
         """
