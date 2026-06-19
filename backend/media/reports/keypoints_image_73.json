@@ -1,0 +1,8 @@
+{
+    "success": true,
+    "model_used": "yolov8s-pose",
+    "position": "unknown",
+    "persons_detected": 0,
+    "processed_image_path": "images/processed/pose_c63881f3.jpg",
+    "persons": []
+}

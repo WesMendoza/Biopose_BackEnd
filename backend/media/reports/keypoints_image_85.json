@@ -1,0 +1,156 @@
+{
+    "success": true,
+    "model_used": "yolov8s-pose",
+    "position": "unknown",
+    "persons_detected": 1,
+    "processed_image_path": "images/processed/pose_7f101da6.jpg",
+    "persons": [
+        {
+            "person_id": 0,
+            "bbox": {
+                "x1": 0,
+                "y1": 0,
+                "x2": 0,
+                "y2": 0
+            },
+            "keypoints": [
+                {
+                    "id": 0,
+                    "name": "nose",
+                    "x": 116.0167007446289,
+                    "y": 101.60047912597656,
+                    "confidence": 0.9950165152549744,
+                    "_comment_confidence": "El valor de la confianza es generado en el análisis inicial de la imagen y no cambia aunque modifiquemos los keypoints"
+                },
+                {
+                    "id": 1,
+                    "name": "left_eye",
+                    "x": 119.54946899414062,
+                    "y": 97.31332397460938,
+                    "confidence": 0.9296649694442749,
+                    "_comment_confidence": "El valor de la confianza es generado en el análisis inicial de la imagen y no cambia aunque modifiquemos los keypoints"
+                },
+                {
+                    "id": 2,
+                    "name": "right_eye",
+                    "x": 109.57698822021484,
+                    "y": 96.44149780273438,
+                    "confidence": 0.9928863644599915,
+                    "_comment_confidence": "El valor de la confianza es generado en el análisis inicial de la imagen y no cambia aunque modifiquemos los keypoints"
+                },
+                {
+                    "id": 3,
+                    "name": "left_ear",
+                    "x": 119.41659545898438,
+                    "y": 100.65216064453125,
+                    "confidence": 0.1430354118347168,
+                    "_comment_confidence": "El valor de la confianza es generado en el análisis inicial de la imagen y no cambia aunque modifiquemos los keypoints"
+                },
+                {
+                    "id": 4,
+                    "name": "right_ear",
+                    "x": 95.02848815917969,
+                    "y": 99.23986053466797,
+                    "confidence": 0.9425808787345886,
+                    "_comment_confidence": "El valor de la confianza es generado en el análisis inicial de la imagen y no cambia aunque modifiquemos los keypoints"
+                },
+                {
+                    "id": 5,
+                    "name": "left_shoulder",
+                    "x": 125.46563720703125,
+                    "y": 128.73451232910156,
+                    "confidence": 0.9756659269332886,
+                    "_comment_confidence": "El valor de la confianza es generado en el análisis inicial de la imagen y no cambia aunque modifiquemos los keypoints"
+                },
+                {
+                    "id": 6,
+                    "name": "right_shoulder",
+                    "x": 78.71810150146484,
+                    "y": 126.55004119873047,
+                    "confidence": 0.9930804371833801,
+                    "_comment_confidence": "El valor de la confianza es generado en el análisis inicial de la imagen y no cambia aunque modifiquemos los keypoints"
+                },
+                {
+                    "id": 7,
+                    "name": "left_elbow",
+                    "x": 147.49981689453125,
+                    "y": 97.18767547607422,
+                    "confidence": 0.9612433314323425,
+                    "_comment_confidence": "El valor de la confianza es generado en el análisis inicial de la imagen y no cambia aunque modifiquemos los keypoints"
+                },
+                {
+                    "id": 8,
+                    "name": "right_elbow",
+                    "x": 54.090309143066406,
+                    "y": 93.36164855957031,
+                    "confidence": 0.9913098812103271,
+                    "_comment_confidence": "El valor de la confianza es generado en el análisis inicial de la imagen y no cambia aunque modifiquemos los keypoints"
+                },
+                {
+                    "id": 9,
+                    "name": "left_wrist",
+                    "x": 162.80551147460938,
+                    "y": 57.3234977722168,
+                    "confidence": 0.971994936466217,
+                    "_comment_confidence": "El valor de la confianza es generado en el análisis inicial de la imagen y no cambia aunque modifiquemos los keypoints"
+                },
+                {
+                    "id": 10,
+                    "name": "right_wrist",
+                    "x": 44.058712005615234,
+                    "y": 50.249916076660156,
+                    "confidence": 0.9926897883415222,
+                    "_comment_confidence": "El valor de la confianza es generado en el análisis inicial de la imagen y no cambia aunque modifiquemos los keypoints"
+                },
+                {
+                    "id": 11,
+                    "name": "left_hip",
+                    "x": 116.19632720947266,
+                    "y": 227.4572296142578,
+                    "confidence": 0.9719629883766174,
+                    "_comment_confidence": "El valor de la confianza es generado en el análisis inicial de la imagen y no cambia aunque modifiquemos los keypoints"
+                },
+                {
+                    "id": 12,
+                    "name": "right_hip",
+                    "x": 85.73467254638672,
+                    "y": 226.58082580566406,
+                    "confidence": 0.9795427322387695,
+                    "_comment_confidence": "El valor de la confianza es generado en el análisis inicial de la imagen y no cambia aunque modifiquemos los keypoints"
+                },
+                {
+                    "id": 13,
+                    "name": "left_knee",
+                    "x": 125.23513793945312,
+                    "y": 246.3101348876953,
+                    "confidence": 0.08854831010103226,
+                    "_comment_confidence": "El valor de la confianza es generado en el análisis inicial de la imagen y no cambia aunque modifiquemos los keypoints"
+                },
+                {
+                    "id": 14,
+                    "name": "right_knee",
+                    "x": 75.80757141113281,
+                    "y": 240.59043884277344,
+                    "confidence": 0.10717587918043137,
+                    "_comment_confidence": "El valor de la confianza es generado en el análisis inicial de la imagen y no cambia aunque modifiquemos los keypoints"
+                },
+                {
+                    "id": 15,
+                    "name": "left_ankle",
+                    "x": 106.91451263427734,
+                    "y": 253.0,
+                    "confidence": 0.0021306623239070177,
+                    "_comment_confidence": "El valor de la confianza es generado en el análisis inicial de la imagen y no cambia aunque modifiquemos los keypoints"
+                },
+                {
+                    "id": 16,
+                    "name": "right_ankle",
+                    "x": 86.44876861572266,
+                    "y": 253.0,
+                    "confidence": 0.002637398662045598,
+                    "_comment_confidence": "El valor de la confianza es generado en el análisis inicial de la imagen y no cambia aunque modifiquemos los keypoints"
+                }
+            ]
+        }
+    ]
+}
