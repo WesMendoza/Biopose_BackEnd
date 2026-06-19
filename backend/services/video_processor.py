@@ -1,5 +1,6 @@
 """
 Utilidades de procesamiento de video para la Fase 3.
+Motor Híbrido: YOLOv8-pose (2D) y MediaPipe (3D)
 """
 
 import base64
@@ -11,6 +12,7 @@ import numpy as np
 
 from services.behavior_detection import BehaviorDetectionService
 from services.pose_detection import PoseDetectionService
+from services.mediapipe_detection import MediaPipePoseService  # <--- NUEVO SERVICIO 3D
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_YOLO_MODEL_PATH = PROJECT_ROOT / 'yolov8s-pose.pt'
@@ -18,6 +20,7 @@ DEFAULT_LSTM_MODEL_PATH = PROJECT_ROOT / 'resources' / 'models' / 'lstm_3clasess
 DEFAULT_LABEL_MAP_PATH = PROJECT_ROOT / 'resources' / 'models' / 'label_map_3clases.json'
 
 _POSE_SERVICE = None
+_MP_POSE_SERVICE = None  # <--- SINGLETON 3D
 _BEHAVIOR_SERVICE = None
 
 COCO_KEYPOINT_NAMES = [
@@ -33,6 +36,12 @@ def get_pose_service():
         _POSE_SERVICE = PoseDetectionService(model_path=str(DEFAULT_YOLO_MODEL_PATH))
     return _POSE_SERVICE
 
+def get_mp_pose_service():
+    global _MP_POSE_SERVICE
+    if _MP_POSE_SERVICE is None:
+        _MP_POSE_SERVICE = MediaPipePoseService()
+    return _MP_POSE_SERVICE
+
 def get_behavior_service():
     global _BEHAVIOR_SERVICE
     if _BEHAVIOR_SERVICE is None:
@@ -42,52 +51,96 @@ def get_behavior_service():
         )
     return _BEHAVIOR_SERVICE
 
-# ====================================================================
-# CORRECCIÓN DEFINITIVA DE CONFIANZA
-# ====================================================================
-def _first_person_keypoints(raw_pose_data):
-    persons = raw_pose_data.get('keypoints', []) if raw_pose_data else []
-    confidences = raw_pose_data.get('confidences', []) if raw_pose_data else []
-    
-    if not persons:
-        return []
 
-    first_person = persons[0].get('keypoints', [])
-    
-    # Manejo robusto de las confianzas. Si es una lista de listas, tomamos la primera.
-    # Si es solo una lista plana, la tomamos entera.
-    confidence_values = []
-    if confidences:
-        if isinstance(confidences[0], list):
-            confidence_values = confidences[0]
-        else:
-            confidence_values = confidences
+# ====================================================================
+# LÓGICA HEURÍSTICA DE COMPORTAMIENTOS ESPECÍFICOS
+# Formato esperado de kp: [x, y, z, confianza, nombre]
+# ====================================================================
 
-    keypoints = []
-    
-    for index, name in enumerate(COCO_KEYPOINT_NAMES):
-        if index < len(first_person):
-            point = first_person[index]
-            # Si point ya tiene 3 valores (x, y, conf) desde pose_detection.py, lo usamos.
-            # Esto es vital porque a veces pose_detection.py lo formatea directamente.
-            if isinstance(point, (list, tuple)) and len(point) >= 3:
-                x_value = float(point[0])
-                y_value = float(point[1])
-                confidence = float(point[2])
-            else:
-                x_value = float(point[0]) if len(point) > 0 else 0.0
-                y_value = float(point[1]) if len(point) > 1 else 0.0
-                confidence = float(confidence_values[index]) if index < len(confidence_values) else 0.0
+def detectar_manos_ocultas_o_armas(frame_kps, usar_3d):
+    """
+    Si usar_3d es True, usamos el Eje Z para saber si la mano está intersectando 
+    el cuerpo (Z cercana a 0) o escondida detrás (Z fuertemente positiva).
+    Si es 2D, usamos la lógica de descarte por confianza de YOLO.
+    """
+    try:
+        hombro_izq, hombro_der = frame_kps[5], frame_kps[6]
+        muneca_izq, muneca_der = frame_kps[9], frame_kps[10]
+
+        if usar_3d:
+            # Índice 2 es el eje Z
+            z_hombro_promedio = (hombro_izq[2] + hombro_der[2]) / 2
+            
+            # En MediaPipe, Z negativa es hacia la cámara, Z positiva es alejándose.
+            mano_escondida_espalda = (muneca_izq[2] > z_hombro_promedio + 0.15) or \
+                                     (muneca_der[2] > z_hombro_promedio + 0.15)
+            return mano_escondida_espalda
         else:
-            x_value, y_value, confidence = 0.0, 0.0, 0.0
-            
-        # Filtro estricto: Si la coordenada es (0,0), la confianza DEBE ser 0.0
-        if x_value == 0.0 and y_value == 0.0:
-            confidence = 0.0
-            
-        keypoints.append([x_value, y_value, confidence, name])
+            # Índice 3 es la confianza. Lógica 2D original
+            hombros_visibles = hombro_izq[3] > 0.5 and hombro_der[3] > 0.5
+            munecas_ocultas = (muneca_izq[3] < 0.3 or (muneca_izq[0] == 0 and muneca_izq[1] == 0)) and \
+                              (muneca_der[3] < 0.3 or (muneca_der[0] == 0 and muneca_der[1] == 0))
+
+            return hombros_visibles and munecas_ocultas
+    except IndexError:
+        return False
+
+def detectar_mano_bajo_ropa(frame_kps):
+    """
+    Crea un polígono entre hombros y cadera, y revisa si la muñeca está dentro.
+    """
+    try:
+        hombro_izq, hombro_der = frame_kps[5], frame_kps[6]
+        cadera_izq, cadera_der = frame_kps[11], frame_kps[12]
+        muneca_izq, muneca_der = frame_kps[9], frame_kps[10]
+
+        # Validamos con la confianza (Índice 3)
+        if any(kp[3] < 0.5 for kp in [hombro_izq, hombro_der, cadera_izq, cadera_der]):
+            return False
+
+        min_x = min(hombro_izq[0], hombro_der[0], cadera_izq[0], cadera_der[0])
+        max_x = max(hombro_izq[0], hombro_der[0], cadera_izq[0], cadera_der[0])
+        min_y = min(hombro_izq[1], hombro_der[1]) 
+        max_y = max(cadera_izq[1], cadera_der[1]) 
+
+        mano_izq_dentro = (muneca_izq[3] > 0.4) and (min_x <= muneca_izq[0] <= max_x) and (min_y <= muneca_izq[1] <= max_y)
+        mano_der_dentro = (muneca_der[3] > 0.4) and (min_x <= muneca_der[0] <= max_x) and (min_y <= muneca_der[1] <= max_y)
+
+        return mano_izq_dentro or mano_der_dentro
+    except IndexError:
+        return False
+
+def detectar_mirada_excesiva(frame_kps_history):
+    """
+    Evalúa la varianza del vector nariz-cuello en los últimos N frames.
+    """
+    if len(frame_kps_history) < 10:
+        return False
         
-    return keypoints
+    angulos = []
+    for f_kps in frame_kps_history:
+        try:
+            nariz, hombro_izq, hombro_der = f_kps[0], f_kps[5], f_kps[6]
+            if nariz[3] < 0.5 or hombro_izq[3] < 0.5 or hombro_der[3] < 0.5:
+                continue
+                
+            centro_cuello_x = (hombro_izq[0] + hombro_der[0]) / 2
+            centro_cuello_y = (hombro_izq[1] + hombro_der[1]) / 2
+            
+            angulo = np.arctan2(nariz[1] - centro_cuello_y, nariz[0] - centro_cuello_x)
+            angulos.append(angulo)
+        except IndexError:
+            continue
+            
+    if len(angulos) < 10:
+        return False
+        
+    varianza = np.var(angulos[-10:])
+    return varianza < 0.005
+
+
+# ====================================================================
+# BUCLE PRINCIPAL DE PROCESAMIENTO DE VIDEO
 # ====================================================================
 
 def analyze_video_behavior(video_path, mode='operativo', dimension='2D', fps_skip=5, confidence_threshold=0.75):
@@ -105,7 +158,15 @@ def analyze_video_behavior(video_path, mode='operativo', dimension='2D', fps_ski
     sampled_keypoints = []
     sampled_frames = []
     
-    fps_skip = max(1, fps_skip)
+    # 1. MANEJO DEL MODO DE PROCESAMIENTO
+    if mode == 'analitico' or mode == 'debug':
+        fps_skip = 1 
+    else:
+        fps_skip = max(1, int(fps_skip))
+
+    # 2. MANEJO DE LA DIMENSIÓN (2D YOLO vs 3D MediaPipe)
+    usar_3d = (dimension == '3D')
+
     frame_index = 0
 
     while True:
@@ -120,15 +181,35 @@ def analyze_video_behavior(video_path, mode='operativo', dimension='2D', fps_ski
             continue
 
         frame_resized = cv2.resize(frame, (640, 640))
-        fg_mask = bg_subtractor.apply(frame_resized)
-        motion_level = cv2.countNonZero(fg_mask)
         
-        if motion_level < 500:
-            continue
+        if mode != 'debug':
+            fg_mask = bg_subtractor.apply(frame_resized)
+            motion_level = cv2.countNonZero(fg_mask)
+            if motion_level < 500:
+                continue
 
-        raw_pose = get_pose_service().detect_pose_frame(frame_resized)
-        first_person = _first_person_keypoints(raw_pose)
-        
+        # == MOTOR DUAL DE INFERENCIA ==
+        if usar_3d:
+            raw_pose_mp = get_mp_pose_service().detect_pose_frame_3d(frame_resized)
+            if raw_pose_mp:
+                first_person = raw_pose_mp[0] 
+            else:
+                first_person = []
+        else:
+            raw_pose = get_pose_service().detect_pose_frame(frame_resized)
+            # YOLO: Convertir de [x, y, conf] a [x, y, z=0.0, conf]
+            kps_crudos = raw_pose.get('keypoints', []) if raw_pose else []
+            first_person = []
+            
+            if kps_crudos:
+                p_coords = kps_crudos[0].get('keypoints', [])
+                p_confs = raw_pose.get('confidences', [[]])[0]
+                for idx_kp in range(len(p_coords)):
+                    x, y = p_coords[idx_kp]
+                    c = p_confs[idx_kp] if idx_kp < len(p_confs) else 0.0
+                    if x == 0.0 and y == 0.0: c = 0.0
+                    first_person.append([float(x), float(y), 0.0, float(c)])
+
         if len(first_person) < 17:
             continue
 
@@ -138,8 +219,11 @@ def analyze_video_behavior(video_path, mode='operativo', dimension='2D', fps_ski
             'frame': frame_resized,
         })
         
-        # GUARDAMOS TODOS LOS DATOS: [x, y, confidence, name]
-        sampled_keypoints.append([[float(p[0]), float(p[1]), float(p[2]), str(p[3])] for p in first_person[:17]])
+        # Guardar: [x, y, z, confidence, name]
+        sampled_keypoints.append([
+            [float(p[0]), float(p[1]), float(p[2]), float(p[3]), str(COCO_KEYPOINT_NAMES[idx])] 
+            for idx, p in enumerate(first_person[:17])
+        ])
 
     capture.release()
 
@@ -147,67 +231,120 @@ def analyze_video_behavior(video_path, mode='operativo', dimension='2D', fps_ski
     person_keypoints = []
     
     if sampled_keypoints:
-        # LSTM solo toma X e Y
-        lstm_sequence = [[[pt[0], pt[1]] for pt in frame_kps] for frame_kps in sampled_keypoints]
+        # 1. EVALUACIÓN LSTM (Red Neuronal)
+        if usar_3d:
+             lstm_sequence = [[[pt[0], pt[1], pt[2]] for pt in frame_kps] for frame_kps in sampled_keypoints]
+        else:
+             lstm_sequence = [[[pt[0], pt[1]] for pt in frame_kps] for frame_kps in sampled_keypoints]
+             
         sequence = np.array(lstm_sequence, dtype=np.float32)
+        coordenadas_esperadas = 3 if usar_3d else 2
         
-        if sequence.ndim != 3 or sequence.shape[1] != 17:
-            return {
-                'detections': [],
-                'person_keypoints': [],
-                'total_frames': total_frames,
-                'duration_seconds': duration_seconds,
-                'processing_time_seconds': round(time.time() - start_time, 3),
-                'summary': {
-                    'detections_by_type': {},
-                    'average_confidence': 0.0,
-                    'max_confidence': 0.0,
-                    'error': 'Secuencia inválida'
-                },
-            }
-            
-        if sequence.shape[0] < get_behavior_service().window_size:
-            pad_count = get_behavior_service().window_size - sequence.shape[0]
-            sequence = np.concatenate([sequence, np.repeat(sequence[-1][None, :, :], pad_count, axis=0)], axis=0)
+        if sequence.ndim == 3 and sequence.shape[1] == 17 and sequence.shape[2] == coordenadas_esperadas:
+            if sequence.shape[0] < get_behavior_service().window_size:
+                pad_count = get_behavior_service().window_size - sequence.shape[0]
+                sequence = np.concatenate([sequence, np.repeat(sequence[-1][None, :, :], pad_count, axis=0)], axis=0)
 
-        prediction = get_behavior_service().predict_behavior(sequence, confidence_threshold=confidence_threshold)
-        label = prediction.get('behavior', 'UNKNOWN')
-        confidence = float(prediction.get('confidence', 0.0))
+            try:
+                prediction = get_behavior_service().predict_behavior(sequence, confidence_threshold=confidence_threshold)
+                label = prediction.get('behavior', 'UNKNOWN')
+                conf = float(prediction.get('confidence', 0.0))
 
-        if prediction.get('is_valid') and label not in ('UNKNOWN', 'ERROR'):
-            last_frame = sampled_frames[-1]
-            detections.append({
-                'tipo_evento': label,
-                'confianza': confidence,
-                'frame_inicio': sampled_frames[0]['frame_index'],
-                'frame_fin': last_frame['frame_index'],
-                'segundo_inicio': sampled_frames[0]['timestamp_sec'],
-                'segundo_fin': last_frame['timestamp_sec'],
-                'personas_involucradas': 1,
-                'detalles': {'mode': mode, 'dimension': dimension, 'all_probs': prediction.get('all_probs', {})},
-                'bounding_boxes': [],
-                'frame_base64': '',
-            })
-
-            # CONSTRUCCIÓN FINAL DEL JSON: Usamos point[2] estrictamente
-            for sf, kp in zip(sampled_frames, sampled_keypoints):
-                keypoints_json = []
-                for index, point in enumerate(kp):
-                    keypoints_json.append({
-                        'id': index,
-                        'name': point[3],
-                        'x': point[0],
-                        'y': point[1],
-                        'z': 0.0,
-                        'confidence': point[2], # <--- AQUÍ SE INYECTA LA CONFIANZA PURA
-                        '_comment_confidence': 'El valor de la confianza es generado en el análisis inicial del video y no cambia aunque modifiquemos los keypoints'
+                if prediction.get('is_valid') and label not in ('UNKNOWN', 'ERROR'):
+                    last_frame = sampled_frames[-1]
+                    detections.append({
+                        'tipo_evento': label,
+                        'confianza': conf,
+                        'frame_inicio': sampled_frames[0]['frame_index'],
+                        'frame_fin': last_frame['frame_index'],
+                        'segundo_inicio': sampled_frames[0]['timestamp_sec'],
+                        'segundo_fin': last_frame['timestamp_sec'],
+                        'personas_involucradas': 1,
+                        'detalles': {'mode': mode, 'dimension': dimension, 'all_probs': prediction.get('all_probs', {})},
+                        'bounding_boxes': [],
+                        'frame_base64': '',
                     })
-                person_keypoints.append({
-                    'person_id': 0,
-                    'frame_index': sf['frame_index'],
-                    'timestamp_sec': sf['timestamp_sec'],
-                    'keypoints_json': keypoints_json,
+            except Exception as e:
+                print(f"Error en la predicción del LSTM ({dimension}): {e}")
+
+        # 2. EVALUACIÓN HEURÍSTICA (Reglas Geométricas con Cooldown de 2 seg)
+        last_hidden_hands = -10.0
+        last_under_clothes = -10.0
+        last_gaze = -10.0
+
+        for i, (sf, kps) in enumerate(zip(sampled_frames, sampled_keypoints)):
+            current_sec = sf['timestamp_sec']
+            
+            # Manos Ocultas (Con o sin Eje Z)
+            if current_sec - last_hidden_hands > 2.0 and detectar_manos_ocultas_o_armas(kps, usar_3d):
+                detections.append({
+                    'tipo_evento': 'hidden_hands',
+                    'confianza': 0.85,
+                    'frame_inicio': sf['frame_index'],
+                    'frame_fin': sf['frame_index'],
+                    'segundo_inicio': current_sec,
+                    'segundo_fin': current_sec,
+                    'personas_involucradas': 1,
+                    'detalles': {'mode': mode, 'razon': 'Z de muñeca mayor al hombro' if usar_3d else 'baja confianza en muñecas'},
+                    'bounding_boxes': [],
+                    'frame_base64': '',
                 })
+                last_hidden_hands = current_sec
+
+            # Mano bajo ropa
+            if current_sec - last_under_clothes > 2.0 and detectar_mano_bajo_ropa(kps):
+                detections.append({
+                    'tipo_evento': 'hand_under_clothes',
+                    'confianza': 0.80,
+                    'frame_inicio': sf['frame_index'],
+                    'frame_fin': sf['frame_index'],
+                    'segundo_inicio': current_sec,
+                    'segundo_fin': current_sec,
+                    'personas_involucradas': 1,
+                    'detalles': {'mode': mode, 'razon': 'muñeca intersecta torso'},
+                    'bounding_boxes': [],
+                    'frame_base64': '',
+                })
+                last_under_clothes = current_sec
+
+            # Mirada excesiva
+            if i >= 10 and (current_sec - last_gaze > 2.0):
+                history = sampled_keypoints[i-10:i+1]
+                if detectar_mirada_excesiva(history):
+                    frame_inicio_obj = sampled_frames[i-10]
+                    detections.append({
+                        'tipo_evento': 'excessive_gaze',
+                        'confianza': 0.90,
+                        'frame_inicio': frame_inicio_obj['frame_index'],
+                        'frame_fin': sf['frame_index'],
+                        'segundo_inicio': frame_inicio_obj['timestamp_sec'],
+                        'segundo_fin': current_sec,
+                        'personas_involucradas': 1,
+                        'detalles': {'mode': mode, 'razon': 'baja varianza en vector cuello-nariz'},
+                        'bounding_boxes': [],
+                        'frame_base64': '',
+                    })
+                    last_gaze = current_sec
+
+        # 3. CONSTRUCCIÓN FINAL DEL JSON
+        for sf, kp in zip(sampled_frames, sampled_keypoints):
+            keypoints_json = []
+            for index, point in enumerate(kp):
+                keypoints_json.append({
+                    'id': index,
+                    'name': point[4], # El nombre está en el índice 4
+                    'x': point[0],
+                    'y': point[1],
+                    'z': point[2],    # El eje Z está en el índice 2
+                    'confidence': point[3], # La confianza está en el índice 3
+                    '_comment_confidence': 'El valor de la confianza proviene del análisis inicial de la IA y no cambia aunque modifiquemos los keypoints'
+                })
+            person_keypoints.append({
+                'person_id': 0,
+                'frame_index': sf['frame_index'],
+                'timestamp_sec': sf['timestamp_sec'],
+                'keypoints_json': keypoints_json,
+            })
 
     summary = {
         'detections_by_type': {},
@@ -258,4 +395,4 @@ def generate_frames_from_video(video_path, fps_value=5, max_duration_seconds=30)
         })
 
     capture.release()
-    return frames 
+    return frames
