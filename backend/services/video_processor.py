@@ -200,6 +200,7 @@ def analyze_video_behavior(video_path, mode='operativo', dimension='2D', fps_ski
                         'y': point[1],
                         'z': 0.0,
                         'confidence': point[2], # <--- AQUÍ SE INYECTA LA CONFIANZA PURA
+                        '_comment_confidence': 'El valor de la confianza es generado en el análisis inicial del video y no cambia aunque modifiquemos los keypoints'
                     })
                 person_keypoints.append({
                     'person_id': 0,

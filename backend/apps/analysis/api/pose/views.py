@@ -17,6 +17,13 @@ from .serializers import PoseDetectionResponseSerializer
 from services.pose_detection import PoseDetectionService
 from apps.analysis.models import ImageUpload
 
+KEYPOINT_NAMES = {
+    0: "nose", 1: "left_eye", 2: "right_eye", 3: "left_ear", 4: "right_ear",
+    5: "left_shoulder", 6: "right_shoulder", 7: "left_elbow", 8: "right_elbow",
+    9: "left_wrist", 10: "right_wrist", 11: "left_hip", 12: "right_hip",
+    13: "left_knee", 14: "right_knee", 15: "left_ankle", 16: "right_ankle"
+}
+
 class PoseDetectionImageView(APIView):
     """
     POST /api/analysis/pose/image/<image_id>/process/
@@ -87,10 +94,13 @@ class PoseDetectionImageView(APIView):
                 conf = float(person_confs[i]) if i < len(person_confs) else 0.0
                 formatted_kps.append({
                     "id": i, 
-                    "name": f"kp_{i}", 
+                    # AQUÍ REEMPLAZAMOS EL kp_{i} POR EL DICCIONARIO
+                    "name": KEYPOINT_NAMES.get(i, f"kp_{i}"), 
                     "x": float(kp[0]), 
                     "y": float(kp[1]), 
-                    "confidence": conf
+                    "confidence": conf,
+                    # AQUÍ AGREGAMOS EL COMENTARIO INFORMATIVO
+                    "_comment_confidence": "El valor de la confianza es generado en el análisis inicial de la imagen y no cambia aunque modifiquemos los keypoints"
                 })
             
             persons_formatted.append({
@@ -98,7 +108,6 @@ class PoseDetectionImageView(APIView):
                 "bbox": {"x1": 0, "y1": 0, "x2": 0, "y2": 0}, 
                 "keypoints": formatted_kps
             })
-
         response_data = {
             "success": True,
             "model_used": "yolov8s-pose",
