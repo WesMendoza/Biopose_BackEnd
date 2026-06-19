@@ -30,7 +30,13 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-default-key')
 DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
 # SE AGREGÓ LA URL DE S3 AQUÍ
-ALLOWED_HOSTS = ['16.58.233.154.nip.io', 'localhost', '127.0.0.1', 'biopose-front.s3-website.us-east-2.amazonaws.com']
+ALLOWED_HOSTS = [
+    '16.58.233.154.nip.io', 
+    'localhost', 
+    '127.0.0.1', 
+    'biopose-front.s3-website.us-east-2.amazonaws.com',
+    'feature-cambios-jahir-aws.d12tl618ooqvuj.amplifyapp.com'
+]
 
 
 # Application definition
@@ -192,6 +198,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://16.58.233.154",
     "https://16.58.233.154.nip.io",
     "http://localhost:5173",
+    "https://feature-cambios-jahir-aws.d12tl618ooqvuj.amplifyapp.com",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -202,4 +209,5 @@ CSRF_TRUSTED_ORIGINS = [
     "http://16.58.233.154",
     "https://16.58.233.154.nip.io",
     "http://localhost:5173",
+    "https://feature-cambios-jahir-aws.d12tl618ooqvuj.amplifyapp.com",
 ]
