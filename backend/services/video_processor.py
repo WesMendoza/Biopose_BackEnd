@@ -3,6 +3,7 @@ Utilidades de procesamiento de video para la Fase 3.
 Motor Híbrido: YOLOv8-pose (2D) y MediaPipe (3D)
 """
 
+import os
 import base64
 import time
 from pathlib import Path
@@ -14,10 +15,20 @@ from services.behavior_detection import BehaviorDetectionService
 from services.pose_detection import PoseDetectionService
 from services.mediapipe_detection import MediaPipePoseService  # <--- NUEVO SERVICIO 3D
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_YOLO_MODEL_PATH = PROJECT_ROOT / 'yolov8s-pose.pt'
-DEFAULT_LSTM_MODEL_PATH = PROJECT_ROOT / 'resources' / 'models' / 'lstm_3clasesstride1.pt'
-DEFAULT_LABEL_MAP_PATH = PROJECT_ROOT / 'resources' / 'models' / 'label_map_3clases.json'
+# ====================================================================
+# BLINDAJE DE RUTAS PARA CELERY
+# ====================================================================
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+DEFAULT_YOLO_MODEL_PATH = os.path.join(BASE_DIR, 'yolov8s-pose.pt')
+DEFAULT_LSTM_MODEL_PATH = os.path.join(BASE_DIR, 'resources', 'models', 'lstm_3clasesstride1.pt')
+DEFAULT_LABEL_MAP_PATH = os.path.join(BASE_DIR, 'resources', 'models', 'label_map_3clases.json')
+
+if not os.path.exists(DEFAULT_YOLO_MODEL_PATH):
+    print(f"❌ ERROR FATAL: YOLO no encontrado en {DEFAULT_YOLO_MODEL_PATH}")
+if not os.path.exists(DEFAULT_LSTM_MODEL_PATH):
+    print(f"❌ ERROR FATAL: LSTM no encontrado en {DEFAULT_LSTM_MODEL_PATH}")
+# ====================================================================
 
 _POSE_SERVICE = None
 _MP_POSE_SERVICE = None  # <--- SINGLETON 3D
