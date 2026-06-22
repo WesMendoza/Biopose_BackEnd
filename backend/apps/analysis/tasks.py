@@ -31,7 +31,7 @@ def process_video_task(self, video_id, mode='operativo', dimension='2D', fps_ski
             confidence_threshold=confidence_threshold
         )
 
-        # 1. CREAMOS EL ARCHIVO JSON FÍSICO TEMPORALMENTE
+        # 1. CREAMOS EL ARCHIVO JSON FÍSICO TEMPORALMENTE (ESTRUCTURA CORREGIDA)
         report_dir = os.path.join(settings.MEDIA_ROOT, 'reports')
         os.makedirs(report_dir, exist_ok=True)
         json_filename = f'keypoints_video_{video_id}.json'
@@ -39,7 +39,7 @@ def process_video_task(self, video_id, mode='operativo', dimension='2D', fps_ski
         
         with open(json_path, 'w') as f:
             json.dump({
-                'keypoints': resultado.get('person_keypoints', []),
+                'frames': resultado.get('frames_data', []),  # <--- AQUÍ SE GUARDA LA MULTITUD
                 'detections': resultado.get('detections', [])
             }, f)
         
@@ -55,7 +55,6 @@ def process_video_task(self, video_id, mode='operativo', dimension='2D', fps_ski
             totalPeleas=resultado.get('summary', {}).get('detections_by_type', {}).get('PELEAR', 0),
             totalDisturbios=resultado.get('summary', {}).get('detections_by_type', {}).get('DISTURBIO', 0),
             confianzaPromedio=resultado.get('summary', {}).get('average_confidence', 0.0),
-            confianzaMaxima=resultado.get('summary', {}).get('max_confidence', 0.0),
             tiempoProcesamientoSegundos=resultado.get('processing_time_seconds', 0.0),
             estadisticas=resultado.get('summary', {}),
             rutaJsonKeypoints=ruta_json_relativa,
