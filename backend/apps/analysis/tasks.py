@@ -13,23 +13,32 @@ def _resolve_media_path(stored_path):
     return os.path.join(settings.MEDIA_ROOT, stored_path)
 
 @shared_task(bind=True)
-def process_video_task(self, video_id, mode='operativo', dimension='2D', fps_skip=5, confidence_threshold=0.75):
+def process_video_task(self, video_id, mode='operativo', dimension='2D', fps_skip=5, confidence_threshold=0.75, analysis_type='multipersona'):
     try:
         video_upload = VideoUpload.objects.get(idVideoUpload=video_id)
         video_upload.estado = 'PROCESSING'
         video_upload.celeryTaskId = self.request.id
         video_upload.save(update_fields=['estado', 'celeryTaskId'])
 
-        from services.video_processor import analyze_video_behavior
+        from services.video_processor import analyze_video_individual, analyze_video_multipersona
         absolute_video_path = os.path.join(settings.MEDIA_ROOT, str(video_upload.rutaArchivo))
 
-        resultado = analyze_video_behavior(
-            video_path=absolute_video_path,
-            mode=mode,
-            dimension=dimension,
-            fps_skip=fps_skip,
-            confidence_threshold=confidence_threshold
-        )
+        if analysis_type == 'individual':
+            resultado = analyze_video_individual(
+                video_path=absolute_video_path,
+                mode=mode,
+                dimension=dimension,
+                fps_skip=fps_skip,
+                confidence_threshold=confidence_threshold
+            )
+        else:
+            resultado = analyze_video_multipersona(
+                video_path=absolute_video_path,
+                mode=mode,
+                dimension=dimension,
+                fps_skip=fps_skip,
+                confidence_threshold=confidence_threshold
+            )
 
         # 1. CREAMOS EL ARCHIVO JSON FÍSICO TEMPORALMENTE
         report_dir = os.path.join(settings.MEDIA_ROOT, 'reports')

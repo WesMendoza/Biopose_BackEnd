@@ -40,6 +40,7 @@ class ProcessVideoView(APIView):
         dimension = request.data.get('dimension', '2D')
         fps_skip = int(request.data.get('fps_skip', 5))
         confidence_threshold = float(request.data.get('confidence_threshold', 0.75))
+        analysis_type = request.data.get('analysis_type', 'multipersona')
 
         # Enviar la tarea a Celery de forma asíncrona (.delay)
         task = process_video_task.delay(
@@ -47,7 +48,8 @@ class ProcessVideoView(APIView):
             mode=mode,
             dimension=dimension,
             fps_skip=fps_skip,
-            confidence_threshold=confidence_threshold
+            confidence_threshold=confidence_threshold,
+            analysis_type=analysis_type
         )
 
         return Response({
