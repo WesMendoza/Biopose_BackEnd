@@ -151,6 +151,7 @@ def detectar_mirada_excesiva(frame_kps_history):
 # ====================================================================
 
 def analyze_video_multipersona(video_path, mode='operativo', dimension='2D', fps_skip=5, confidence_threshold=0.75):
+    from collections import deque
     start_time = time.time()
     capture = cv2.VideoCapture(video_path)
     if not capture.isOpened(): raise ValueError(f'No se pudo abrir el video: {video_path}')
@@ -162,11 +163,21 @@ def analyze_video_multipersona(video_path, mode='operativo', dimension='2D', fps
     bg_subtractor = cv2.createBackgroundSubtractorMOG2(history=50, varThreshold=25, detectShadows=False)
 
     sampled_frames = []
-    lstm_global_sequence = []
     
     fps_skip = 1 if mode in ['analitico', 'debug'] else max(1, int(fps_skip))
     usar_3d = (dimension == '3D')
     frame_index = 0
+
+    WINDOW_SIZE = get_behavior_service().window_size
+    EVAL_WINDOW = 45
+    MIN_P = 30
+    MIN_D = 38
+    END_W = 30
+    ESCAPE_D = 25
+
+    buffers = {}
+    states_history = {}
+    reporte_eventos = []
 
     while True:
         ok, frame = capture.read()
@@ -192,13 +203,14 @@ def analyze_video_multipersona(video_path, mode='operativo', dimension='2D', fps
                     kps = [[float(pt[0]), float(pt[1]), float(pt[2]), float(pt[3]), str(COCO_KEYPOINT_NAMES[i])] for i, pt in enumerate(p_data[:17])]
                     current_frame_people.append({'person_id': p_idx, 'keypoints': kps})
         else:
-            raw_pose = get_pose_service().detect_pose_frame(frame_resized)
-            kps_crudos = raw_pose.get('keypoints', []) if raw_pose else []
-            confidencias = raw_pose.get('confidences', []) if raw_pose else []
+            raw_pose = get_pose_service().detect_pose_with_tracking(frame_resized, persist=True)
+            tracked_persons = raw_pose.get('tracked_persons', [])
             
-            for p_idx, p_coords in enumerate(kps_crudos):
-                coords = p_coords.get('keypoints', [])
-                confs = confidencias[p_idx] if p_idx < len(confidencias) else []
+            for p_data in tracked_persons:
+                pid = p_data['person_id']
+                coords = p_data['keypoints']
+                confs = p_data['confidences']
+                
                 kps = []
                 for i in range(17):
                     x, y = coords[i] if i < len(coords) else (0.0, 0.0)
@@ -206,7 +218,85 @@ def analyze_video_multipersona(video_path, mode='operativo', dimension='2D', fps
                     kps.append([float(x), float(y), 0.0, float(c), str(COCO_KEYPOINT_NAMES[i])])
                 
                 if len(kps) >= 17:
-                    current_frame_people.append({'person_id': p_idx, 'keypoints': kps})
+                    current_frame_people.append({'person_id': pid, 'keypoints': kps})
+
+                    if pid not in states_history:
+                        states_history[pid] = {
+                            "state": "NEUTRAL",
+                            "event_label": None,
+                            "history": deque(maxlen=64),
+                            "end_counter": 0,
+                            "current_event": None
+                        }
+                    
+                    person_state = states_history[pid]
+                    if pid not in buffers:
+                        buffers[pid] = deque(maxlen=WINDOW_SIZE)
+                    
+                    buffers[pid].append([[kp[0], kp[1]] for kp in kps])
+
+                    if len(buffers[pid]) == WINDOW_SIZE:
+                        seq = np.array(buffers[pid], dtype=np.float32)
+                        
+                        try:
+                            prediction = get_behavior_service().predict_behavior(seq, confidence_threshold=0.0)
+                            pred_label = prediction.get('behavior', 'UNKNOWN')
+                            prob = float(prediction.get('confidence', 0.0))
+                            
+                            person_state["history"].append((pred_label, prob))
+                            historial_reciente = list(person_state["history"])[-EVAL_WINDOW:]
+
+                            pelear_frames = sum(1 for lbl, p in historial_reciente if lbl == "PELEAR" and p >= 0.85)
+                            disturbio_frames = sum(1 for lbl, p in historial_reciente if lbl == "DISTURBIO" and p >= 0.92)
+                            calma_frames = len(historial_reciente) - pelear_frames - disturbio_frames
+
+                            sustained_action = person_state.get("event_label") or "NEUTRAL"
+
+                            if sustained_action == "NEUTRAL":
+                                if pelear_frames >= MIN_P: sustained_action = "PELEAR"
+                                elif disturbio_frames >= MIN_D: sustained_action = "DISTURBIO"
+                            elif sustained_action == "PELEAR":
+                                if calma_frames >= END_W: sustained_action = "NEUTRAL"
+                                elif disturbio_frames >= MIN_D: sustained_action = "DISTURBIO"
+                            elif sustained_action == "DISTURBIO":
+                                if calma_frames >= ESCAPE_D: sustained_action = "NEUTRAL"
+                                elif pelear_frames >= MIN_P: sustained_action = "PELEAR"
+
+                            if person_state["state"] == "NEUTRAL":
+                                if sustained_action in ["PELEAR", "DISTURBIO"]:
+                                    person_state["state"] = "EVENTO"
+                                    person_state["event_label"] = sustained_action
+                                    
+                                    frames_esperados = MIN_P if sustained_action == "PELEAR" else MIN_D
+                                    inicio_real_frames = max(0, current_idx - frames_esperados)
+                                    
+                                    person_state["current_event"] = {
+                                        "tipo_evento": sustained_action,
+                                        "confianza": float(prob),
+                                        "frame_inicio": inicio_real_frames,
+                                        "segundo_inicio": float(inicio_real_frames / fps) if fps else 0.0,
+                                        "personas_involucradas": 1,
+                                        "detalles": {'mode': mode, 'dimension': dimension, 'pid': pid}
+                                    }
+                            else:
+                                if sustained_action != person_state["event_label"]:
+                                    person_state["end_counter"] += 1
+                                    if person_state["end_counter"] >= END_W:
+                                        person_state["current_event"]["frame_fin"] = current_idx
+                                        person_state["current_event"]["segundo_fin"] = float(current_idx / fps) if fps else 0.0
+                                        reporte_eventos.append(person_state["current_event"])
+                                        
+                                        person_state["state"] = "NEUTRAL"
+                                        person_state["event_label"] = None
+                                        person_state["current_event"] = None
+                                        person_state["end_counter"] = 0
+                                else:
+                                    person_state["end_counter"] = 0
+                                    if prob > person_state["current_event"]["confianza"]:
+                                        person_state["current_event"]["confianza"] = float(prob)
+
+                        except Exception as e:
+                            print(f"Error LSTM Predict: {e}")
 
         if current_frame_people:
             sampled_frames.append({
@@ -214,54 +304,32 @@ def analyze_video_multipersona(video_path, mode='operativo', dimension='2D', fps
                 'timestamp_sec': float(current_idx / fps) if fps else 0.0,
                 'persons': current_frame_people
             })
-            lstm_global_sequence.append(current_frame_people[0]['keypoints'])
+
+    for p_id, state_info in states_history.items():
+        if state_info["state"] == "EVENTO" and state_info["current_event"]:
+            state_info["current_event"]["frame_fin"] = current_idx
+            state_info["current_event"]["segundo_fin"] = float(current_idx / fps) if fps else 0.0
+            reporte_eventos.append(state_info["current_event"])
 
     capture.release()
 
     detections = []
-    
-    if lstm_global_sequence:
-        if usar_3d: sequence_data = [[[pt[0], pt[1], pt[2]] for pt in frame_kps] for frame_kps in lstm_global_sequence]
-        else: sequence_data = [[[pt[0], pt[1]] for pt in frame_kps] for frame_kps in lstm_global_sequence]
-             
-        sequence = np.array(sequence_data, dtype=np.float32)
-        coordenadas = 3 if usar_3d else 2
+    if reporte_eventos:
+        reporte_eventos.sort(key=lambda x: x['segundo_inicio'])
         
-        window_size = get_behavior_service().window_size
-        step = window_size // 2
-
-        if sequence.ndim == 3 and sequence.shape[1] == 17 and sequence.shape[2] == coordenadas:
-            for start_idx in range(0, sequence.shape[0], step):
-                window = sequence[start_idx : start_idx + window_size]
-                
-                if window.shape[0] < window_size:
-                    pad_count = window_size - window.shape[0]
-                    window = np.concatenate([window, np.repeat(window[-1][None, :, :], pad_count, axis=0)], axis=0)
-
-                try:
-                    prediction = get_behavior_service().predict_behavior(window, confidence_threshold=confidence_threshold)
-                    label = prediction.get('behavior', 'UNKNOWN')
-                    conf = float(prediction.get('confidence', 0.0))
-
-                    if label in ['PELEAR', 'DISTURBIO', 'FIGHT', 'DISTURBANCE']:
-                        idx_inicio = min(start_idx, len(sampled_frames)-1)
-                        idx_fin = min(start_idx + window.shape[0] - 1, len(sampled_frames)-1)
-                        
-                        first_f = sampled_frames[idx_inicio]
-                        last_f = sampled_frames[idx_fin]
-                        
-                        detections.append({
-                            'tipo_evento': label,
-                            'confianza': conf,
-                            'frame_inicio': first_f['frame_index'],
-                            'frame_fin': last_f['frame_index'],
-                            'segundo_inicio': first_f['timestamp_sec'],
-                            'segundo_fin': last_f['timestamp_sec'],
-                            'personas_involucradas': len(first_f['persons']),
-                            'detalles': {'mode': mode, 'dimension': dimension},
-                        })
-                except Exception as e:
-                    print(f"Error LSTM: {e}")
+        consolidado = reporte_eventos[0].copy()
+        for ev in reporte_eventos[1:]:
+            if ev['segundo_inicio'] <= consolidado['segundo_fin'] + 2.0:
+                consolidado['segundo_fin'] = max(consolidado['segundo_fin'], ev['segundo_fin'])
+                consolidado['frame_fin'] = max(consolidado['frame_fin'], ev['frame_fin'])
+                consolidado['confianza'] = max(consolidado['confianza'], ev['confianza'])
+                consolidado['personas_involucradas'] += 1
+                if ev['tipo_evento'] == 'PELEAR' and consolidado['tipo_evento'] != 'PELEAR':
+                    consolidado['tipo_evento'] = 'PELEAR'
+            else:
+                detections.append(consolidado)
+                consolidado = ev.copy()
+        detections.append(consolidado)
 
     frames_data_json = []
     for sf in sampled_frames:
