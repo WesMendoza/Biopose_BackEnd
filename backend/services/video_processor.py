@@ -19,7 +19,6 @@ from services.mediapipe_detection import MediaPipePoseService  # <--- NUEVO SERV
 # BLINDAJE DE RUTAS PARA CELERY
 # ====================================================================
 BASE_DIR = Path(__file__).resolve().parent.parent
-
 DEFAULT_YOLO_MODEL_PATH = os.path.join(BASE_DIR, 'yolov8s-pose.pt')
 DEFAULT_LSTM_MODEL_PATH = os.path.join(BASE_DIR, 'resources', 'models', 'lstm_3clasesstride1.pt')
 DEFAULT_LABEL_MAP_PATH = os.path.join(BASE_DIR, 'resources', 'models', 'label_map_3clases.json')
@@ -43,25 +42,21 @@ COCO_KEYPOINT_NAMES = [
 
 def get_pose_service():
     global _POSE_SERVICE
-    if _POSE_SERVICE is None:
-        _POSE_SERVICE = PoseDetectionService(model_path=str(DEFAULT_YOLO_MODEL_PATH))
+    if _POSE_SERVICE is None: _POSE_SERVICE = PoseDetectionService(model_path=str(DEFAULT_YOLO_MODEL_PATH))
     return _POSE_SERVICE
 
 def get_mp_pose_service():
     global _MP_POSE_SERVICE
-    if _MP_POSE_SERVICE is None:
-        _MP_POSE_SERVICE = MediaPipePoseService()
+    if _MP_POSE_SERVICE is None: _MP_POSE_SERVICE = MediaPipePoseService()
     return _MP_POSE_SERVICE
 
 def get_behavior_service():
     global _BEHAVIOR_SERVICE
     if _BEHAVIOR_SERVICE is None:
         _BEHAVIOR_SERVICE = BehaviorDetectionService(
-            model_path=str(DEFAULT_LSTM_MODEL_PATH),
-            label_map_path=str(DEFAULT_LABEL_MAP_PATH),
+            model_path=str(DEFAULT_LSTM_MODEL_PATH), label_map_path=str(DEFAULT_LABEL_MAP_PATH),
         )
     return _BEHAVIOR_SERVICE
-
 
 # ====================================================================
 # LÓGICA HEURÍSTICA DE COMPORTAMIENTOS ESPECÍFICOS
@@ -157,8 +152,7 @@ def detectar_mirada_excesiva(frame_kps_history):
 def analyze_video_behavior(video_path, mode='operativo', dimension='2D', fps_skip=5, confidence_threshold=0.75):
     start_time = time.time()
     capture = cv2.VideoCapture(video_path)
-    if not capture.isOpened():
-        raise ValueError(f'No se pudo abrir el video: {video_path}')
+    if not capture.isOpened(): raise ValueError(f'No se pudo abrir el video: {video_path}')
 
     total_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
     fps = float(capture.get(cv2.CAP_PROP_FPS) or 0)
@@ -166,92 +160,74 @@ def analyze_video_behavior(video_path, mode='operativo', dimension='2D', fps_ski
 
     bg_subtractor = cv2.createBackgroundSubtractorMOG2(history=50, varThreshold=25, detectShadows=False)
 
-    sampled_keypoints = []
     sampled_frames = []
+    lstm_global_sequence = [] # <--- Secuencia global para el LSTM (Como en el legacy)
     
-    # 1. MANEJO DEL MODO DE PROCESAMIENTO
-    if mode == 'analitico' or mode == 'debug':
-        fps_skip = 1 
-    else:
-        fps_skip = max(1, int(fps_skip))
-
-    # 2. MANEJO DE LA DIMENSIÓN (2D YOLO vs 3D MediaPipe)
+    fps_skip = 1 if mode in ['analitico', 'debug'] else max(1, int(fps_skip))
     usar_3d = (dimension == '3D')
-
     frame_index = 0
 
     while True:
         ok, frame = capture.read()
-        if not ok:
-            break
-            
+        if not ok: break
+        
         current_idx = frame_index
         frame_index += 1
 
-        if current_idx % fps_skip != 0:
-            continue
+        if current_idx % fps_skip != 0: continue
 
         frame_resized = cv2.resize(frame, (640, 640))
         
         if mode != 'debug':
             fg_mask = bg_subtractor.apply(frame_resized)
-            motion_level = cv2.countNonZero(fg_mask)
-            if motion_level < 500:
-                continue
+            if cv2.countNonZero(fg_mask) < 500: continue
 
-        # == MOTOR DUAL DE INFERENCIA ==
+        current_frame_people = []
+
         if usar_3d:
             raw_pose_mp = get_mp_pose_service().detect_pose_frame_3d(frame_resized)
-            if raw_pose_mp:
-                first_person = raw_pose_mp[0] 
-            else:
-                first_person = []
+            for p_idx, p_data in enumerate(raw_pose_mp):
+                if len(p_data) >= 17:
+                    kps = [[float(pt[0]), float(pt[1]), float(pt[2]), float(pt[3]), str(COCO_KEYPOINT_NAMES[i])] for i, pt in enumerate(p_data[:17])]
+                    current_frame_people.append({'person_id': p_idx, 'keypoints': kps})
         else:
             raw_pose = get_pose_service().detect_pose_frame(frame_resized)
-            # YOLO: Convertir de [x, y, conf] a [x, y, z=0.0, conf]
             kps_crudos = raw_pose.get('keypoints', []) if raw_pose else []
-            first_person = []
+            confidencias = raw_pose.get('confidences', []) if raw_pose else []
             
-            if kps_crudos:
-                p_coords = kps_crudos[0].get('keypoints', [])
-                p_confs = raw_pose.get('confidences', [[]])[0]
-                for idx_kp in range(len(p_coords)):
-                    x, y = p_coords[idx_kp]
-                    c = p_confs[idx_kp] if idx_kp < len(p_confs) else 0.0
-                    if x == 0.0 and y == 0.0: c = 0.0
-                    first_person.append([float(x), float(y), 0.0, float(c)])
+            for p_idx, p_coords in enumerate(kps_crudos):
+                coords = p_coords.get('keypoints', [])
+                confs = confidencias[p_idx] if p_idx < len(confidencias) else []
+                kps = []
+                for i in range(17):
+                    x, y = coords[i] if i < len(coords) else (0.0, 0.0)
+                    c = confs[i] if i < len(confs) else 0.0
+                    kps.append([float(x), float(y), 0.0, float(c), str(COCO_KEYPOINT_NAMES[i])])
+                
+                if len(kps) >= 17:
+                    current_frame_people.append({'person_id': p_idx, 'keypoints': kps})
 
-        if len(first_person) < 17:
-            continue
-
-        sampled_frames.append({
-            'frame_index': current_idx,
-            'timestamp_sec': float(current_idx / fps) if fps else 0.0,
-            'frame': frame_resized,
-        })
-        
-        # Guardar: [x, y, z, confidence, name]
-        sampled_keypoints.append([
-            [float(p[0]), float(p[1]), float(p[2]), float(p[3]), str(COCO_KEYPOINT_NAMES[idx])] 
-            for idx, p in enumerate(first_person[:17])
-        ])
+        if current_frame_people:
+            sampled_frames.append({
+                'frame_index': current_idx,
+                'timestamp_sec': float(current_idx / fps) if fps else 0.0,
+                'persons': current_frame_people
+            })
+            # Alimentamos al LSTM con la persona principal de la escena (Índice 0)
+            lstm_global_sequence.append(current_frame_people[0]['keypoints'])
 
     capture.release()
 
     detections = []
-    person_keypoints = []
     
-    if sampled_keypoints:
-        # 1. EVALUACIÓN LSTM (Red Neuronal)
-        if usar_3d:
-             lstm_sequence = [[[pt[0], pt[1], pt[2]] for pt in frame_kps] for frame_kps in sampled_keypoints]
-        else:
-             lstm_sequence = [[[pt[0], pt[1]] for pt in frame_kps] for frame_kps in sampled_keypoints]
+    if lstm_global_sequence:
+        if usar_3d: sequence_data = [[[pt[0], pt[1], pt[2]] for pt in frame_kps] for frame_kps in lstm_global_sequence]
+        else: sequence_data = [[[pt[0], pt[1]] for pt in frame_kps] for frame_kps in lstm_global_sequence]
              
-        sequence = np.array(lstm_sequence, dtype=np.float32)
-        coordenadas_esperadas = 3 if usar_3d else 2
+        sequence = np.array(sequence_data, dtype=np.float32)
+        coordenadas = 3 if usar_3d else 2
         
-        if sequence.ndim == 3 and sequence.shape[1] == 17 and sequence.shape[2] == coordenadas_esperadas:
+        if sequence.ndim == 3 and sequence.shape[1] == 17 and sequence.shape[2] == coordenadas:
             if sequence.shape[0] < get_behavior_service().window_size:
                 pad_count = get_behavior_service().window_size - sequence.shape[0]
                 sequence = np.concatenate([sequence, np.repeat(sequence[-1][None, :, :], pad_count, axis=0)], axis=0)
@@ -261,113 +237,41 @@ def analyze_video_behavior(video_path, mode='operativo', dimension='2D', fps_ski
                 label = prediction.get('behavior', 'UNKNOWN')
                 conf = float(prediction.get('confidence', 0.0))
 
-                if prediction.get('is_valid') and label not in ('UNKNOWN', 'ERROR'):
-                    last_frame = sampled_frames[-1]
+                if label in ['PELEAR', 'DISTURBIO', 'FIGHT', 'DISTURBANCE']:
+                    first_f = sampled_frames[0]
+                    last_f = sampled_frames[-1]
                     detections.append({
                         'tipo_evento': label,
                         'confianza': conf,
-                        'frame_inicio': sampled_frames[0]['frame_index'],
-                        'frame_fin': last_frame['frame_index'],
-                        'segundo_inicio': sampled_frames[0]['timestamp_sec'],
-                        'segundo_fin': last_frame['timestamp_sec'],
-                        'personas_involucradas': 1,
-                        'detalles': {'mode': mode, 'dimension': dimension, 'all_probs': prediction.get('all_probs', {})},
-                        'bounding_boxes': [],
-                        'frame_base64': '',
+                        'frame_inicio': first_f['frame_index'],
+                        'frame_fin': last_f['frame_index'],
+                        'segundo_inicio': first_f['timestamp_sec'],
+                        'segundo_fin': last_f['timestamp_sec'],
+                        'personas_involucradas': len(sampled_frames[0]['persons']),
+                        'detalles': {'mode': mode, 'dimension': dimension},
                     })
             except Exception as e:
-                print(f"Error en la predicción del LSTM ({dimension}): {e}")
+                print(f"Error LSTM: {e}")
 
-        # 2. EVALUACIÓN HEURÍSTICA (Reglas Geométricas con Cooldown de 2 seg)
-        last_hidden_hands = -10.0
-        last_under_clothes = -10.0
-        last_gaze = -10.0
-
-        for i, (sf, kps) in enumerate(zip(sampled_frames, sampled_keypoints)):
-            current_sec = sf['timestamp_sec']
-            
-            # Manos Ocultas (Con o sin Eje Z)
-            if current_sec - last_hidden_hands > 2.0 and detectar_manos_ocultas_o_armas(kps, usar_3d):
-                detections.append({
-                    'tipo_evento': 'hidden_hands',
-                    'confianza': 0.85,
-                    'frame_inicio': sf['frame_index'],
-                    'frame_fin': sf['frame_index'],
-                    'segundo_inicio': current_sec,
-                    'segundo_fin': current_sec,
-                    'personas_involucradas': 1,
-                    'detalles': {'mode': mode, 'razon': 'Z de muñeca mayor al hombro' if usar_3d else 'baja confianza en muñecas'},
-                    'bounding_boxes': [],
-                    'frame_base64': '',
-                })
-                last_hidden_hands = current_sec
-
-            # Mano bajo ropa
-            if current_sec - last_under_clothes > 2.0 and detectar_mano_bajo_ropa(kps):
-                detections.append({
-                    'tipo_evento': 'hand_under_clothes',
-                    'confianza': 0.80,
-                    'frame_inicio': sf['frame_index'],
-                    'frame_fin': sf['frame_index'],
-                    'segundo_inicio': current_sec,
-                    'segundo_fin': current_sec,
-                    'personas_involucradas': 1,
-                    'detalles': {'mode': mode, 'razon': 'muñeca intersecta torso'},
-                    'bounding_boxes': [],
-                    'frame_base64': '',
-                })
-                last_under_clothes = current_sec
-
-            # Mirada excesiva
-            if i >= 10 and (current_sec - last_gaze > 2.0):
-                history = sampled_keypoints[i-10:i+1]
-                if detectar_mirada_excesiva(history):
-                    frame_inicio_obj = sampled_frames[i-10]
-                    detections.append({
-                        'tipo_evento': 'excessive_gaze',
-                        'confianza': 0.90,
-                        'frame_inicio': frame_inicio_obj['frame_index'],
-                        'frame_fin': sf['frame_index'],
-                        'segundo_inicio': frame_inicio_obj['timestamp_sec'],
-                        'segundo_fin': current_sec,
-                        'personas_involucradas': 1,
-                        'detalles': {'mode': mode, 'razon': 'baja varianza en vector cuello-nariz'},
-                        'bounding_boxes': [],
-                        'frame_base64': '',
-                    })
-                    last_gaze = current_sec
-
-        # 3. CONSTRUCCIÓN FINAL DEL JSON
-        for sf, kp in zip(sampled_frames, sampled_keypoints):
-            keypoints_json = []
-            for index, point in enumerate(kp):
-                keypoints_json.append({
-                    'id': index,
-                    'name': point[4], # El nombre está en el índice 4
-                    'x': point[0],
-                    'y': point[1],
-                    'z': point[2],    # El eje Z está en el índice 2
-                    'confidence': point[3], # La confianza está en el índice 3
-                    '_comment_confidence': 'El valor de la confianza proviene del análisis inicial de la IA y no cambia aunque modifiquemos los keypoints'
-                })
-            person_keypoints.append({
-                'person_id': 0,
-                'frame_index': sf['frame_index'],
-                'timestamp_sec': sf['timestamp_sec'],
-                'keypoints_json': keypoints_json,
-            })
+    # Formateo JSON para React
+    frames_data_json = []
+    for sf in sampled_frames:
+        persons_json = []
+        for p in sf['persons']:
+            kps_formateados = [{'id': idx, 'name': pt[4], 'x': pt[0], 'y': pt[1], 'z': pt[2], 'confidence': pt[3]} for idx, pt in enumerate(p['keypoints'])]
+            persons_json.append({'person_id': p['person_id'], 'keypoints_json': kps_formateados})
+        frames_data_json.append({'frame_index': sf['frame_index'], 'timestamp_sec': sf['timestamp_sec'], 'persons': persons_json})
 
     summary = {
         'detections_by_type': {},
         'average_confidence': float(np.mean([item['confianza'] for item in detections])) if detections else 0.0,
-        'max_confidence': float(np.max([item['confianza'] for item in detections])) if detections else 0.0,
     }
-    for detection in detections:
-        summary['detections_by_type'][detection['tipo_evento']] = summary['detections_by_type'].get(detection['tipo_evento'], 0) + 1
+    for d in detections:
+        summary['detections_by_type'][d['tipo_evento']] = summary['detections_by_type'].get(d['tipo_evento'], 0) + 1
 
     return {
         'detections': detections,
-        'person_keypoints': person_keypoints,
+        'frames_data': frames_data_json,
         'total_frames': total_frames,
         'duration_seconds': duration_seconds,
         'processing_time_seconds': round(time.time() - start_time, 3),

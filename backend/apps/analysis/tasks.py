@@ -39,7 +39,7 @@ def process_video_task(self, video_id, mode='operativo', dimension='2D', fps_ski
         
         with open(json_path, 'w') as f:
             json.dump({
-                'keypoints': resultado.get('person_keypoints', []),
+                'frames': resultado.get('frames_data', []),  # <--- AQUÍ PASAMOS TODOS LOS FRAMES MULTIPERSONA
                 'detections': resultado.get('detections', [])
             }, f)
         
