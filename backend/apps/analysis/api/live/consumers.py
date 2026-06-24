@@ -59,11 +59,10 @@ class LiveDetectionConsumer(WebsocketConsumer):
             # Procesar el frame
             output_frame, detections, num_people = self.processor.process_frame(frame)
 
-            # Extraer keypoints de pose para dibujar en el canvas del cliente
-            # (En modo WebSocket no enviamos el frame procesado completo,
-            #  solo los datos para que el frontend dibuje sobre su propio video)
+            # Enviar la respuesta de vuelta al cliente
             response = {
                 'type': 'result',
+                'frame': self.processor.frame_to_base64(output_frame),
                 'detections': detections if detections else [],
                 'num_people': num_people,
                 'realtime_behaviors': list(self.processor.realtime_unique_behaviors),
