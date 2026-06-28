@@ -13,6 +13,6 @@ urlpatterns = [
     # Módulo LSTM (Detección de comportamiento)
     path('videos/', include('apps.analysis.api.behavior.urls')),
     
-    # Módulo Streaming (Websockets y monitoreo real-time)
-    # path('', include('apps.analysis.api.live.urls')),
+    # Módulo Streaming (SSE y monitoreo real-time)
+    path('live/', include('apps.analysis.api.live.urls')),
 ]

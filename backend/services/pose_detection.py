@@ -124,13 +124,21 @@ class PoseDetectionService:
         
         if boxes.id is None:
             return {'tracked_persons': []}
+
+        # ¡NUEVO! Extraemos el tensor de confianzas completo
+        confs = kps.conf.cpu().numpy() if hasattr(kps, 'conf') and kps.conf is not None else None
         
-        for person_id, keypoints, box in zip(boxes.id.cpu().numpy(), 
+        for idx, (person_id, keypoints, box) in enumerate(zip(boxes.id.cpu().numpy(), 
                                             kps.xy.cpu().numpy(),
-                                            boxes.xyxy.cpu().numpy()):
+                                            boxes.xyxy.cpu().numpy())):
+            
+            # Buscamos las confianzas específicas de esta persona
+            person_confs = confs[idx].tolist() if confs is not None and idx < len(confs) else []
+
             tracked_persons.append({
                 'person_id': int(person_id),
                 'keypoints': keypoints.tolist(),
+                'confidences': person_confs,  # <--- AHORA SÍ LAS ENVIAMOS
                 'bbox': box.tolist()
             })
         
