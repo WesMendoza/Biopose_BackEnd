@@ -45,7 +45,12 @@ class LiveDetectionConsumer(WebsocketConsumer):
 
             # Inicializar el procesador en el primer frame
             if self.processor is None:
-                self.processor = LiveProcessor(frame_skip=fps_skip, dimension=dimension)
+                # El frontend ya realiza el salto de frames y nos envía solo los que debemos procesar.
+                # Por tanto, aquí no saltamos ninguno (frame_skip=1).
+                self.processor = LiveProcessor(frame_skip=1, dimension=dimension)
+                # Estimamos los FPS reales que nos están llegando para que el cálculo de tiempo sea exacto.
+                # Si el frontend salta 3 frames (de 30), nos llegan 10 FPS.
+                self.processor.fps_estimate = 30.0 / (fps_skip if fps_skip > 0 else 1)
 
             # Decodificar el frame base64 a imagen BGR
             img_bytes = base64.b64decode(frame_b64)
