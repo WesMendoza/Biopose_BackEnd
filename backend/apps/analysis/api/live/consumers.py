@@ -61,8 +61,8 @@ class LiveDetectionConsumer(WebsocketConsumer):
                 self.send(text_data=json.dumps({'error': 'Frame inválido'}))
                 return
 
-            # Procesar el frame
-            output_frame, detections, num_people = self.processor.process_frame(frame)
+            # Procesar el frame (pedimos solo overlay porque el frontend muestra el video local)
+            output_frame, detections, num_people = self.processor.process_frame(frame, overlay_only=True)
 
             # Enviar la respuesta de vuelta al cliente
             response = {

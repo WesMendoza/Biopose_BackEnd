@@ -250,7 +250,7 @@ class LiveProcessor:
     # Procesamiento principal de un frame
     # =================================================================
 
-    def process_frame(self, frame):
+    def process_frame(self, frame, overlay_only=False):
         """
         Procesa un frame BGR de OpenCV.
         Retorna: (output_frame_bgr, behaviors_list, num_people)
@@ -258,7 +258,11 @@ class LiveProcessor:
         self.frame_counter += 1
         process_this = (self.frame_skip == 0) or (self.frame_counter % self.frame_skip == 0)
 
-        output_frame = frame.copy()
+        if overlay_only:
+            output_frame = np.zeros_like(frame)
+        else:
+            output_frame = frame.copy()
+            
         behaviors_detected = []
 
         if not process_this:
