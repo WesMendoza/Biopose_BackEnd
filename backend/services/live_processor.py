@@ -298,8 +298,7 @@ class LiveProcessor:
             h, w, _ = frame.shape
 
             # --- 1. Manos ocultas ---
-            multi_hands = hand_results.multi_hand_landmarks if hand_results.multi_hand_landmarks else []
-            hands_hidden = self.detect_hand_pockets(pose_results.pose_landmarks, multi_hands, frame.shape)
+            hands_hidden = self.detect_hand_pockets(pose_results.pose_landmarks)
 
             if hands_hidden:
                 self.person_data['hidden_hands_frames'] += self.frame_skip
