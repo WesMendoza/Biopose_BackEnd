@@ -158,6 +158,9 @@ class LiveProcessor:
         right_elbow = pose_landmarks.landmark[self.mp_pose.PoseLandmark.RIGHT_ELBOW]
         right_wrist = pose_landmarks.landmark[self.mp_pose.PoseLandmark.RIGHT_WRIST]
 
+        left_hip = pose_landmarks.landmark[self.mp_pose.PoseLandmark.LEFT_HIP]
+        right_hip = pose_landmarks.landmark[self.mp_pose.PoseLandmark.RIGHT_HIP]
+
         def calc_angle(shoulder, elbow, wrist):
             v1 = np.array([shoulder.x - elbow.x, shoulder.y - elbow.y])
             v2 = np.array([wrist.x - elbow.x, wrist.y - elbow.y])
@@ -167,16 +170,20 @@ class LiveProcessor:
                 return 0
             return np.degrees(np.arccos(np.clip(dot / norms, -1.0, 1.0)))
 
-        def near_torso(wrist, shoulder, threshold=0.3):
-            # Cerca del pecho/torso
-            return math.sqrt((wrist.x - shoulder.x) ** 2 + (wrist.y - shoulder.y) ** 2) < threshold
+        def near_torso(wrist, shoulder, hip, threshold=0.35):
+            # Cerca del pecho, estómago o cadera
+            center_x = (shoulder.x + hip.x) / 2
+            center_y = (shoulder.y + hip.y) / 2
+            dist_to_center = math.sqrt((wrist.x - center_x) ** 2 + (wrist.y - center_y) ** 2)
+            dist_to_shoulder = math.sqrt((wrist.x - shoulder.x) ** 2 + (wrist.y - shoulder.y) ** 2)
+            return dist_to_center < threshold or dist_to_shoulder < threshold
 
         left_angle = calc_angle(left_shoulder, left_elbow, left_wrist)
         right_angle = calc_angle(right_shoulder, right_elbow, right_wrist)
 
-        # Hacemos los umbrales más flexibles
-        suspicious_left = (45 <= left_angle <= 160) and near_torso(left_wrist, left_shoulder)
-        suspicious_right = (45 <= right_angle <= 160) and near_torso(right_wrist, right_shoulder)
+        # Hacemos los umbrales más flexibles (ángulo entre 20 y 160)
+        suspicious_left = (20 <= left_angle <= 160) and near_torso(left_wrist, left_shoulder, left_hip)
+        suspicious_right = (20 <= right_angle <= 160) and near_torso(right_wrist, right_shoulder, right_hip)
 
         return suspicious_left or suspicious_right
 
@@ -232,13 +239,17 @@ class LiveProcessor:
         dot = np.clip(np.dot(gaze_vector, prev_gaze), -1.0, 1.0)
         angle_change = np.arccos(dot)
 
-        # Lógica 1: Mirada Fija (Staring) - Si el ángulo cambia muy poco
-        if angle_change < 0.05:
+        # Lógica 1: Mirada Fija (Staring)
+        # Si el ángulo cambia poco o si el vector de mirada es muy cercano al centro (mirando a la cámara)
+        is_staring_at_camera = mag < 0.1 # Nose y ojos casi alineados frontalmente
+        is_fixed_gaze = angle_change < 0.15 # Permitimos un ligero temblor natural
+
+        if is_fixed_gaze or is_staring_at_camera:
             if 'staring_frames' not in self.person_data:
                 self.person_data['staring_frames'] = 0
             self.person_data['staring_frames'] += self.frame_skip
             staring_duration = self.person_data['staring_frames'] / self.fps_estimate
-            if staring_duration > 3.0: # 3 segundos mirando fijamente
+            if staring_duration > 1.5: # 1.5 segundos mirando fijamente es suficiente para activar
                 return True
         else:
             self.person_data['staring_frames'] = 0

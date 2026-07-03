@@ -267,8 +267,12 @@ def analyze_video_multipersona(video_path, mode='operativo', dimension='2D', fps
                                     person_state["state"] = "EVENTO"
                                     person_state["event_label"] = sustained_action
                                     
-                                    frames_esperados = MIN_P if sustained_action == "PELEAR" else MIN_D
-                                    inicio_real_frames = max(0, current_idx - frames_esperados)
+                                    # El LSTM requiere WINDOW_SIZE frames para dar una predicción, y hemos acumulado MIN_P predicciones.
+                                    # Además, como saltamos frames (fps_skip), la duración real en frames del video original es mayor.
+                                    frames_prediccion = MIN_P if sustained_action == "PELEAR" else MIN_D
+                                    frames_esperados_reales = (frames_prediccion + WINDOW_SIZE) * fps_skip
+                                    
+                                    inicio_real_frames = max(0, current_idx - frames_esperados_reales)
                                     
                                     person_state["current_event"] = {
                                         "tipo_evento": sustained_action,
