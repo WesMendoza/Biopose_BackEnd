@@ -20,7 +20,11 @@ def _generate_stream(source, fps_skip, dimension):
     processor = LiveProcessor(frame_skip=fps_skip, dimension=dimension)
 
     # source puede ser 0 (webcam local) o una URL string
-    cap = cv2.VideoCapture(source)
+    if isinstance(source, str) and (source.startswith('http') or source.startswith('rtsp')):
+        # Forzar FFmpeg para URLs de red (Windows suele fallar con el backend por defecto)
+        cap = cv2.VideoCapture(source, cv2.CAP_FFMPEG)
+    else:
+        cap = cv2.VideoCapture(source)
 
     if not cap.isOpened():
         yield f"data: {json.dumps({'error': 'No se pudo abrir la fuente de video'})}\n\n"

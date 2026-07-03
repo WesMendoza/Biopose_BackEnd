@@ -44,9 +44,12 @@ class LiveProcessor:
         self.mp_drawing = mp.solutions.drawing_utils
         self.mp_face_mesh = mp.solutions.face_mesh
 
+        # 2D = Modelo Ligero (0 o 1), 3D = Modelo Pesado (2) para mejor estimación de profundidad
+        complexity = 2 if dimension == '3D' else 1
+
         self.pose = self.mp_pose.Pose(
             static_image_mode=False,
-            model_complexity=1,
+            model_complexity=complexity,
             min_detection_confidence=0.5,
             min_tracking_confidence=0.5
         )
@@ -103,10 +106,16 @@ class LiveProcessor:
     # Detectores individuales (migrados de BehaviorDetector.py)
     # =================================================================
 
-    def detect_hand_pockets(self, pose_landmarks):
+    def detect_hand_pockets(self, pose_landmarks, multi_hands):
         """Detecta manos ocultas detrás del cuerpo o fuera de vista."""
         if not pose_landmarks:
             return False
+            
+        # Si MediaPipe Hands logró detectar claramente las manos (puntos amarillos),
+        # significa que están a la vista de la cámara.
+        visible_hands_count = len(multi_hands) if multi_hands else 0
+        if visible_hands_count >= 2:
+            return False # Ambas manos están visibles, no están ocultas
             
         l_wrist = pose_landmarks.landmark[self.mp_pose.PoseLandmark.LEFT_WRIST]
         r_wrist = pose_landmarks.landmark[self.mp_pose.PoseLandmark.RIGHT_WRIST]
@@ -130,9 +139,10 @@ class LiveProcessor:
         center_l_dist = math.sqrt((l_wrist.x - mid_hip_x)**2 + (l_wrist.y - mid_hip_y)**2)
         center_r_dist = math.sqrt((r_wrist.x - mid_hip_x)**2 + (r_wrist.y - mid_hip_y)**2)
         
-        # Aumentamos el umbral a 0.25 para que sea más sensible
-        if l_dist < 0.25 or r_dist < 0.25 or center_l_dist < 0.2 or center_r_dist < 0.2:
-            return True
+        # Solo aplicamos distancias si las muñecas tienen algo de visibilidad
+        if l_wrist.visibility > 0.3 or r_wrist.visibility > 0.3:
+            if l_dist < 0.25 or r_dist < 0.25 or center_l_dist < 0.2 or center_r_dist < 0.2:
+                return True
             
         return False
 
