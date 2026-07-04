@@ -2,11 +2,15 @@ from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
+from rest_framework.views import APIView  # <--- 1. AGREGA ESTA LÍNEA AQUÍ
 from django.db import transaction
 
 from apps.gestionEmpresas.views import BaseStandardViewSet
 from apps.gestionEmpresas.models import EmpresaUsuarioRol
-from .models import MenuOpcion, RolOption
+
+# 2. AGREGA PathDirectory y SystemConfig A ESTA LÍNEA QUE YA TENÍAS:
+from .models import MenuOpcion, RolOption, ParametroCabecera, ParametroDetalle
+
 from .serializers import MenuOpcionSerializer, RolOptionSerializer
 
 class MenuOpcionViewSet(BaseStandardViewSet):
@@ -273,3 +277,79 @@ class RolOptionViewSet(BaseStandardViewSet):
             "mensaje": "Opción removida del rol exitosamente.",
             "detalle": None
         }, status=status.HTTP_200_OK)
+
+class ConfiguracionRutasView(APIView):
+    """
+    Gestiona la configuración global del sistema por EMPRESA.
+    """
+    
+    def get(self, request, *args, **kwargs):
+        id_empresa = request.query_params.get('idEmpresa')
+        if not id_empresa:
+            return Response({"error": "Falta idEmpresa"}, status=400)
+
+        # 1. Buscamos la cabecera por empresa
+        cabecera = ParametroCabecera.objects.filter(idEmpresa=id_empresa).first()
+        
+        if not cabecera:
+            return Response([]) # Devuelve [] si no hay cabecera, tu frontend lo entenderá
+
+        # 2. Buscamos detalles asociados a esa cabecera
+        detalles = ParametroDetalle.objects.filter(
+            codigoParametro=cabecera, # Aquí usamos el objeto directo
+            estado='A'
+        )
+    
+        data = [{"codigo": det.nombreDetalle, "valor": det.valor} for det in detalles]
+        return Response(data, status=status.HTTP_200_OK)
+
+    def post(self, request, *args, **kwargs):
+        codigo_detalle = request.data.get('codigo') 
+        valor = request.data.get('valor') 
+        id_empresa = request.data.get('idEmpresa') # NUEVO: Recibimos de a qué empresa pertenece
+        usuario_actual = str(getattr(request.user, 'idUsuario', 'Sistema'))
+
+        if not codigo_detalle or not valor or not id_empresa:
+            return Response(
+                {"error": "Faltan parámetros", "message": "El código, el valor y el idEmpresa son requeridos."}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Generamos el código único para esta empresa
+        codigo_cabecera = f'CONF_SISTEMA_EMP_{id_empresa}'
+
+        try:
+            # 1. Crear o buscar la Cabecera exclusiva para esta empresa
+            cabecera, _ = ParametroCabecera.objects.get_or_create(
+                codigoParametro=codigo_cabecera,
+                defaults={
+                    'idEmpresa': id_empresa, # Asignamos la empresa en la BD
+                    'nombreParametro': f'Configuración Global - Empresa {id_empresa}',
+                    'usuarioCreacion': usuario_actual
+                }
+            )
+
+            # 2. Guardar el Detalle atado a esa cabecera específica
+            detalle, created = ParametroDetalle.objects.update_or_create(
+                codigoParametro=cabecera,
+                nombreDetalle=codigo_detalle,
+                defaults={
+                    'valor': valor,
+                    'descripcion': f'Configuración {codigo_detalle} para Empresa {id_empresa}',
+                    'usuarioModificacion': usuario_actual
+                }
+            )
+
+            return Response({
+                "success": True,
+                "message": "Parámetro de empresa guardado exitosamente.",
+                "codigo": codigo_detalle,
+                "valor": valor,
+                "idEmpresa": id_empresa
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response(
+                {"error": "Database Error", "message": str(e)}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

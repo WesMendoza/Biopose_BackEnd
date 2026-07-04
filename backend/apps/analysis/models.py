@@ -19,6 +19,7 @@ class ImageUpload(models.Model):
     nombreOriginal = models.CharField(max_length=255, db_column='nombreOriginal')
     rutaArchivoOriginal = models.CharField(max_length=500, db_column='rutaArchivoOriginal')
     rutaArchivoProcesado = models.CharField(max_length=500, null=True, blank=True, db_column='rutaArchivoProcesado')
+    rutaArchivoJson = models.CharField(max_length=500, null=True, blank=True, db_column='rutaArchivoJson')
     tamanioBytes = models.BigIntegerField(db_column='tamanioBytes')
     estado = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING', db_column='estado')
     fechaCarga = models.DateTimeField(auto_now_add=True, db_column='fechaCarga')
