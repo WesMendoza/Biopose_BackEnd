@@ -124,3 +124,38 @@ class VideoUploadView(APIView):
         
         response_data = VideoUploadSerializer(video_upload).data
         return Response(response_data, status=status.HTTP_201_CREATED)
+    
+class VideoCleanupView(APIView):
+    """
+    API para destruir el Video, el JSON y limpiar la Base de Datos.
+    Se ejecuta cuando el Frontend abandona la pantalla o pide procesar uno nuevo.
+    """
+    def delete(self, request, video_id):
+        try:
+            video = VideoUpload.objects.get(idVideoUpload=video_id)
+            
+            # 1. Borrar Video Físico (.mp4)
+            if video.rutaArchivo:
+                video_path = os.path.join(settings.MEDIA_ROOT, str(video.rutaArchivo))
+                if os.path.exists(video_path):
+                    os.remove(video_path)
+            
+            # 2. Borrar Reporte Físico (.json) de forma agresiva
+            json_filename = f'keypoints_video_{video_id}.json'
+            json_path = os.path.join(settings.MEDIA_ROOT, 'reports', json_filename)
+            if os.path.exists(json_path):
+                os.remove(json_path)
+            
+            # 3. Borrar de la Base de Datos
+            video.delete()
+            
+            return Response({"message": "Archivos y datos destruidos correctamente"}, status=200)
+        except VideoUpload.DoesNotExist:
+            # Si el video ya no está en la BD, intentamos borrar el JSON de todos modos
+            json_filename = f'keypoints_video_{video_id}.json'
+            json_path = os.path.join(settings.MEDIA_ROOT, 'reports', json_filename)
+            if os.path.exists(json_path):
+                os.remove(json_path)
+            return Response({"message": "Limpieza física forzada ejecutada"}, status=200)
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)

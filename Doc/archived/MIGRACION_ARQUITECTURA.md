@@ -193,3 +193,5 @@ La migracion se considerara exitosa cuando:
 ## Nota operativa
 
 Este documento debe usarse como referencia viva durante la migracion. Si cambian el alcance, la arquitectura o el orden de ejecucion, esta guia debe actualizarse antes de continuar con el siguiente paso tecnico.
+
+*Nota de Actualización (Fase 4): Se implementó el rastreo y evaluación multi-persona utilizando ByteTrack, permitiendo la evaluación aislada de múltiples sujetos por el modelo LSTM asíncrono.*
