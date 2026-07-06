@@ -5,7 +5,6 @@ import os
 import json
 from django.conf import settings
 
-
 def _resolve_media_path(stored_path):
     if not stored_path:
         return stored_path
@@ -14,43 +13,48 @@ def _resolve_media_path(stored_path):
     return os.path.join(settings.MEDIA_ROOT, stored_path)
 
 @shared_task(bind=True)
-def process_video_task(self, video_id, mode='operativo', dimension='2D', fps_skip=5, confidence_threshold=0.75):
-    """
-    Tarea Celery asíncrona para procesar el análisis de comportamiento de un video.
-    """
+def process_video_task(self, video_id, mode='operativo', dimension='2D', fps_skip=5, confidence_threshold=0.75, analysis_type='multipersona'):
     try:
         video_upload = VideoUpload.objects.get(idVideoUpload=video_id)
         video_upload.estado = 'PROCESSING'
         video_upload.celeryTaskId = self.request.id
         video_upload.save(update_fields=['estado', 'celeryTaskId'])
 
-        # Lógica pesada de procesamiento llamando a video_processor.py (optimizado)
-        from services.video_processor import analyze_video_behavior
-        
-        # Construir ruta absoluta para OpenCV
-        absolute_video_path = os.path.join(settings.MEDIA_ROOT, video_upload.rutaArchivo)
+        from services.video_processor import analyze_video_individual, analyze_video_multipersona
+        absolute_video_path = os.path.join(settings.MEDIA_ROOT, str(video_upload.rutaArchivo))
 
-        # Invocación real del modelo
-        resultado = analyze_video_behavior(
-            video_path=absolute_video_path,
-            mode=mode,
-            dimension=dimension,
-            fps_skip=fps_skip,
-            confidence_threshold=confidence_threshold
-        )
+        if analysis_type == 'individual':
+            resultado = analyze_video_individual(
+                video_path=absolute_video_path,
+                mode=mode,
+                dimension=dimension,
+                fps_skip=fps_skip,
+                confidence_threshold=confidence_threshold
+            )
+        else:
+            resultado = analyze_video_multipersona(
+                video_path=absolute_video_path,
+                mode=mode,
+                dimension=dimension,
+                fps_skip=fps_skip,
+                confidence_threshold=confidence_threshold
+            )
 
-        # Crear directorio y persistir JSON de keypoints
+        # 1. CREAMOS EL ARCHIVO JSON FÍSICO TEMPORALMENTE
         report_dir = os.path.join(settings.MEDIA_ROOT, 'reports')
         os.makedirs(report_dir, exist_ok=True)
         json_filename = f'keypoints_video_{video_id}.json'
         json_path = os.path.join(report_dir, json_filename)
-        with open(json_path, 'w') as f:
-            json.dump(resultado.get('person_keypoints', []), f)
         
-        # Guardar ruta relativa al media root
+        with open(json_path, 'w') as f:
+            json.dump({
+                'frames': resultado.get('frames_data', []),  # <--- AQUÍ PASAMOS TODOS LOS FRAMES MULTIPERSONA
+                'detections': resultado.get('detections', [])
+            }, f)
+        
         ruta_json_relativa = f'reports/{json_filename}'
 
-        # Crear y persistir el reporte (AnalysisReport)
+        # 2. GUARDAMOS EL REPORTE EN DB
         reporte = AnalysisReport.objects.create(
             idVideoUpload=video_upload,
             idEmpresa=video_upload.idEmpresa,
@@ -67,9 +71,6 @@ def process_video_task(self, video_id, mode='operativo', dimension='2D', fps_ski
             usuarioCreacion='Sistema'
         )
 
-        # Aquí podríamos persistir los DetectionEvent y PersonKeypoints si lo deseamos.
-
-        # Marcar como completado
         video_upload.estado = 'COMPLETED'
         video_upload.fechaProcesamiento = timezone.now()
         video_upload.save(update_fields=['estado', 'fechaProcesamiento'])
@@ -77,13 +78,11 @@ def process_video_task(self, video_id, mode='operativo', dimension='2D', fps_ski
         return {'status': 'COMPLETED', 'video_id': video_id, 'report_id': reporte.idAnalysisReport}
 
     except VideoUpload.DoesNotExist:
-        return {'status': 'FAILED', 'error': f'VideoUpload con ID {video_id} no existe.'}
+        return {'status': 'FAILED', 'error': f'Video no existe.'}
     except Exception as e:
-        # En caso de error crítico, actualizar el estado
         try:
             video_upload = VideoUpload.objects.get(idVideoUpload=video_id)
             video_upload.estado = 'FAILED'
             video_upload.save(update_fields=['estado'])
-        except:
-            pass
+        except: pass
         return {'status': 'FAILED', 'error': str(e)}

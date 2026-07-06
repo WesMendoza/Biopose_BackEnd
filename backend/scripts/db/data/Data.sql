@@ -31,13 +31,20 @@ BEGIN
 -- 3. Data para Tabla `menuOption` (Opciones de Menú Base)
     IF NOT EXISTS (SELECT 1 FROM "Dev"."menuOption") THEN
         INSERT INTO "Dev"."menuOption" 
-        ("nombreOption", estado, "usuarioCreacion", "fechaCreacion", "usuarioModificacion", "fechaModificacion", ruta) 
+        ("nombreOption", "ruta", "estado", "usuarioCreacion") 
         VALUES
-        ('Dashboard Central', 'A', 'Script', CURRENT_TIMESTAMP, NULL, NULL, '/dashboard'),
-        ('Gestión de Empresas', 'A', 'Script', CURRENT_TIMESTAMP, NULL, NULL, '/empresas'),
-        ('Usuarios y Roles', 'A', 'Script', CURRENT_TIMESTAMP, NULL, NULL, '/usuarios'),
-        ('Configuración del Sistema', 'A', 'Script', CURRENT_TIMESTAMP, NULL, NULL, '/configuracion'),
-        ('Reportes Generales', 'A', 'Script', CURRENT_TIMESTAMP, NULL, NULL, '/reportes');
+        ('Dashboard', '/app/dashboard', 'A', 'Sistema'),
+        ('Gestión de Usuarios', '/app/users', 'A', 'Sistema'),
+        ('Gestión de Empresas', '/app/gestion-empresas', 'A', 'Sistema'),
+        ('Gestión de Roles', '/app/gestion-roles', 'A', 'Sistema'),
+        ('Configuración de rutas', '/app/pose/routes', 'A', 'Sistema'),
+        ('Detección en imagen', '/app/pose/image', 'A', 'Sistema'),
+        ('Detección en video', '/app/pose/video', 'A', 'Sistema'),
+        ('Verifica tus imágenes', '/app/pose/verify', 'A', 'Sistema'),
+        ('Video (Individual)', '/app/events/individual/video', 'A', 'Sistema'),
+        ('En vivo (Individual)', '/app/events/individual/live', 'A', 'Sistema'),
+        ('Video (Multipersona)', '/app/events/multi/video', 'A', 'Sistema'),
+        ('En vivo (Multipersona)', '/app/events/multi/live', 'A', 'Sistema');
         RAISE NOTICE 'Opciones de menú base insertadas correctamente.';
     END IF;
 END $$;
