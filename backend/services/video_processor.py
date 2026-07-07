@@ -220,87 +220,91 @@ def analyze_video_multipersona(video_path, mode='operativo', dimension='2D', fps
                 if len(kps) >= 17:
                     current_frame_people.append({'person_id': pid, 'keypoints': kps})
 
-                    if pid not in states_history:
-                        states_history[pid] = {
-                            "state": "NEUTRAL",
-                            "event_label": None,
-                            "history": deque(maxlen=64),
-                            "end_counter": 0,
-                            "current_event": None
-                        }
-                    
-                    person_state = states_history[pid]
-                    if pid not in buffers:
-                        buffers[pid] = deque(maxlen=WINDOW_SIZE)
-                    
-                    buffers[pid].append([[kp[0], kp[1]] for kp in kps])
+        for person_dict in current_frame_people:
+            pid = person_dict['person_id']
+            kps = person_dict['keypoints']
 
-                    if len(buffers[pid]) == WINDOW_SIZE:
-                        seq = np.array(buffers[pid], dtype=np.float32)
-                        
-                        try:
-                            prediction = get_behavior_service().predict_behavior(seq, confidence_threshold=0.0)
-                            pred_label = prediction.get('behavior', 'UNKNOWN')
-                            prob = float(prediction.get('confidence', 0.0))
+            if pid not in states_history:
+                states_history[pid] = {
+                    "state": "NEUTRAL",
+                    "event_label": None,
+                    "history": deque(maxlen=64),
+                    "end_counter": 0,
+                    "current_event": None
+                }
+            
+            person_state = states_history[pid]
+            if pid not in buffers:
+                buffers[pid] = deque(maxlen=WINDOW_SIZE)
+            
+            buffers[pid].append([[kp[0], kp[1]] for kp in kps])
+
+            if len(buffers[pid]) == WINDOW_SIZE:
+                seq = np.array(buffers[pid], dtype=np.float32)
+                
+                try:
+                    prediction = get_behavior_service().predict_behavior(seq, confidence_threshold=0.0)
+                    pred_label = prediction.get('behavior', 'UNKNOWN')
+                    prob = float(prediction.get('confidence', 0.0))
+                    
+                    person_state["history"].append((pred_label, prob))
+                    historial_reciente = list(person_state["history"])[-EVAL_WINDOW:]
+
+                    pelear_frames = sum(1 for lbl, p in historial_reciente if lbl == "PELEAR" and p >= confidence_threshold)
+                    disturbio_frames = sum(1 for lbl, p in historial_reciente if lbl == "DISTURBIO" and p >= confidence_threshold)
+                    calma_frames = len(historial_reciente) - pelear_frames - disturbio_frames
+
+                    sustained_action = person_state.get("event_label") or "NEUTRAL"
+
+                    if sustained_action == "NEUTRAL":
+                        if pelear_frames >= MIN_P: sustained_action = "PELEAR"
+                        elif disturbio_frames >= MIN_D: sustained_action = "DISTURBIO"
+                    elif sustained_action == "PELEAR":
+                        if calma_frames >= END_W: sustained_action = "NEUTRAL"
+                        elif disturbio_frames >= MIN_D: sustained_action = "DISTURBIO"
+                    elif sustained_action == "DISTURBIO":
+                        if calma_frames >= ESCAPE_D: sustained_action = "NEUTRAL"
+                        elif pelear_frames >= MIN_P: sustained_action = "PELEAR"
+
+                    if person_state["state"] == "NEUTRAL":
+                        if sustained_action in ["PELEAR", "DISTURBIO"]:
+                            person_state["state"] = "EVENTO"
+                            person_state["event_label"] = sustained_action
                             
-                            person_state["history"].append((pred_label, prob))
-                            historial_reciente = list(person_state["history"])[-EVAL_WINDOW:]
+                            # El LSTM requiere WINDOW_SIZE frames para dar una predicción, y hemos acumulado MIN_P predicciones.
+                            # Además, como saltamos frames (fps_skip), la duración real en frames del video original es mayor.
+                            frames_prediccion = MIN_P if sustained_action == "PELEAR" else MIN_D
+                            frames_esperados_reales = (frames_prediccion + WINDOW_SIZE) * fps_skip
+                            
+                            inicio_real_frames = max(0, current_idx - frames_esperados_reales)
+                            
+                            person_state["current_event"] = {
+                                "tipo_evento": sustained_action,
+                                "confianza": float(prob),
+                                "frame_inicio": inicio_real_frames,
+                                "segundo_inicio": float(inicio_real_frames / fps) if fps else 0.0,
+                                "personas_involucradas": 1,
+                                "detalles": {'mode': mode, 'dimension': dimension, 'pids': [pid]}
+                            }
+                    else:
+                        if sustained_action != person_state["event_label"]:
+                            person_state["end_counter"] += 1
+                            if person_state["end_counter"] >= END_W:
+                                person_state["current_event"]["frame_fin"] = current_idx
+                                person_state["current_event"]["segundo_fin"] = float(current_idx / fps) if fps else 0.0
+                                reporte_eventos.append(person_state["current_event"])
+                                
+                                person_state["state"] = "NEUTRAL"
+                                person_state["event_label"] = None
+                                person_state["current_event"] = None
+                                person_state["end_counter"] = 0
+                        else:
+                            person_state["end_counter"] = 0
+                            if prob > person_state["current_event"]["confianza"]:
+                                person_state["current_event"]["confianza"] = float(prob)
 
-                            pelear_frames = sum(1 for lbl, p in historial_reciente if lbl == "PELEAR" and p >= confidence_threshold)
-                            disturbio_frames = sum(1 for lbl, p in historial_reciente if lbl == "DISTURBIO" and p >= confidence_threshold)
-                            calma_frames = len(historial_reciente) - pelear_frames - disturbio_frames
-
-                            sustained_action = person_state.get("event_label") or "NEUTRAL"
-
-                            if sustained_action == "NEUTRAL":
-                                if pelear_frames >= MIN_P: sustained_action = "PELEAR"
-                                elif disturbio_frames >= MIN_D: sustained_action = "DISTURBIO"
-                            elif sustained_action == "PELEAR":
-                                if calma_frames >= END_W: sustained_action = "NEUTRAL"
-                                elif disturbio_frames >= MIN_D: sustained_action = "DISTURBIO"
-                            elif sustained_action == "DISTURBIO":
-                                if calma_frames >= ESCAPE_D: sustained_action = "NEUTRAL"
-                                elif pelear_frames >= MIN_P: sustained_action = "PELEAR"
-
-                            if person_state["state"] == "NEUTRAL":
-                                if sustained_action in ["PELEAR", "DISTURBIO"]:
-                                    person_state["state"] = "EVENTO"
-                                    person_state["event_label"] = sustained_action
-                                    
-                                    # El LSTM requiere WINDOW_SIZE frames para dar una predicción, y hemos acumulado MIN_P predicciones.
-                                    # Además, como saltamos frames (fps_skip), la duración real en frames del video original es mayor.
-                                    frames_prediccion = MIN_P if sustained_action == "PELEAR" else MIN_D
-                                    frames_esperados_reales = (frames_prediccion + WINDOW_SIZE) * fps_skip
-                                    
-                                    inicio_real_frames = max(0, current_idx - frames_esperados_reales)
-                                    
-                                    person_state["current_event"] = {
-                                        "tipo_evento": sustained_action,
-                                        "confianza": float(prob),
-                                        "frame_inicio": inicio_real_frames,
-                                        "segundo_inicio": float(inicio_real_frames / fps) if fps else 0.0,
-                                        "personas_involucradas": 1,
-                                        "detalles": {'mode': mode, 'dimension': dimension, 'pid': pid}
-                                    }
-                            else:
-                                if sustained_action != person_state["event_label"]:
-                                    person_state["end_counter"] += 1
-                                    if person_state["end_counter"] >= END_W:
-                                        person_state["current_event"]["frame_fin"] = current_idx
-                                        person_state["current_event"]["segundo_fin"] = float(current_idx / fps) if fps else 0.0
-                                        reporte_eventos.append(person_state["current_event"])
-                                        
-                                        person_state["state"] = "NEUTRAL"
-                                        person_state["event_label"] = None
-                                        person_state["current_event"] = None
-                                        person_state["end_counter"] = 0
-                                else:
-                                    person_state["end_counter"] = 0
-                                    if prob > person_state["current_event"]["confianza"]:
-                                        person_state["current_event"]["confianza"] = float(prob)
-
-                        except Exception as e:
-                            print(f"Error LSTM Predict: {e}")
+                except Exception as e:
+                    print(f"Error LSTM Predict: {e}")
 
         if current_frame_people:
             sampled_frames.append({
@@ -329,6 +333,9 @@ def analyze_video_multipersona(video_path, mode='operativo', dimension='2D', fps
                 consolidado['frame_fin'] = max(consolidado['frame_fin'], ev['frame_fin'])
                 consolidado['confianza'] = max(consolidado['confianza'], ev['confianza'])
                 consolidado['personas_involucradas'] += 1
+                if 'pids' in ev.get('detalles', {}) and 'pids' in consolidado.get('detalles', {}):
+                    # Unir listas de pids y quitar duplicados
+                    consolidado['detalles']['pids'] = list(set(consolidado['detalles']['pids'] + ev['detalles']['pids']))
             else:
                 detections.append(consolidado)
                 consolidado = ev.copy()
