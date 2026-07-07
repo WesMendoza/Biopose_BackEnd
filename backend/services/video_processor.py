@@ -290,8 +290,9 @@ def analyze_video_multipersona(video_path, mode='operativo', dimension='2D', fps
                         if sustained_action != person_state["event_label"]:
                             person_state["end_counter"] += 1
                             if person_state["end_counter"] >= END_W:
-                                person_state["current_event"]["frame_fin"] = current_idx
-                                person_state["current_event"]["segundo_fin"] = float(current_idx / fps) if fps else 0.0
+                                frame_fin_real = max(0, current_idx - (END_W * fps_skip))
+                                person_state["current_event"]["frame_fin"] = frame_fin_real
+                                person_state["current_event"]["segundo_fin"] = float(frame_fin_real / fps) if fps else 0.0
                                 reporte_eventos.append(person_state["current_event"])
                                 
                                 person_state["state"] = "NEUTRAL"
