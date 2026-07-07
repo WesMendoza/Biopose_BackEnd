@@ -323,13 +323,12 @@ def analyze_video_multipersona(video_path, mode='operativo', dimension='2D', fps
         
         consolidado = reporte_eventos[0].copy()
         for ev in reporte_eventos[1:]:
-            if ev['segundo_inicio'] <= consolidado['segundo_fin'] + 2.0:
+            # Solo combinamos eventos si están cerca Y son del mismo tipo
+            if ev['segundo_inicio'] <= consolidado['segundo_fin'] + 2.0 and ev['tipo_evento'] == consolidado['tipo_evento']:
                 consolidado['segundo_fin'] = max(consolidado['segundo_fin'], ev['segundo_fin'])
                 consolidado['frame_fin'] = max(consolidado['frame_fin'], ev['frame_fin'])
                 consolidado['confianza'] = max(consolidado['confianza'], ev['confianza'])
                 consolidado['personas_involucradas'] += 1
-                if ev['tipo_evento'] == 'PELEAR' and consolidado['tipo_evento'] != 'PELEAR':
-                    consolidado['tipo_evento'] = 'PELEAR'
             else:
                 detections.append(consolidado)
                 consolidado = ev.copy()
