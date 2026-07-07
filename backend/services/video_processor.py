@@ -169,11 +169,11 @@ def analyze_video_multipersona(video_path, mode='operativo', dimension='2D', fps
     frame_index = 0
 
     WINDOW_SIZE = get_behavior_service().window_size
-    EVAL_WINDOW = 45
-    MIN_P = 30
-    MIN_D = 38
-    END_W = 30
-    ESCAPE_D = 25
+    EVAL_WINDOW = 15
+    MIN_P = 5
+    MIN_D = 5
+    END_W = 10
+    ESCAPE_D = 10
 
     buffers = {}
     states_history = {}
@@ -246,8 +246,8 @@ def analyze_video_multipersona(video_path, mode='operativo', dimension='2D', fps
                             person_state["history"].append((pred_label, prob))
                             historial_reciente = list(person_state["history"])[-EVAL_WINDOW:]
 
-                            pelear_frames = sum(1 for lbl, p in historial_reciente if lbl == "PELEAR" and p >= 0.85)
-                            disturbio_frames = sum(1 for lbl, p in historial_reciente if lbl == "DISTURBIO" and p >= 0.92)
+                            pelear_frames = sum(1 for lbl, p in historial_reciente if lbl == "PELEAR" and p >= confidence_threshold)
+                            disturbio_frames = sum(1 for lbl, p in historial_reciente if lbl == "DISTURBIO" and p >= confidence_threshold)
                             calma_frames = len(historial_reciente) - pelear_frames - disturbio_frames
 
                             sustained_action = person_state.get("event_label") or "NEUTRAL"
@@ -372,7 +372,9 @@ def analyze_video_individual(video_path, mode='operativo', dimension='2D', fps_s
 
     sampled_frames = []
     detections = []
-    frame_kps_history = deque(maxlen=30)
+    
+    # Historial de kps por persona para "mirada excesiva"
+    person_kps_history = {}
     
     fps_skip = 1 if mode in ['analitico', 'debug'] else max(1, int(fps_skip))
     usar_3d = (dimension == '3D')
@@ -427,9 +429,14 @@ def analyze_video_individual(video_path, mode='operativo', dimension='2D', fps_s
             })
             
             for persona in current_frame_people:
+                pid = persona['person_id']
                 kps = persona['keypoints']
-                frame_kps_history.append(kps)
                 
+                if pid not in person_kps_history:
+                    person_kps_history[pid] = deque(maxlen=30)
+                person_kps_history[pid].append(kps)
+                
+                # 1. Detectar mano bajo ropa
                 if detectar_mano_bajo_ropa(kps):
                     detections.append({
                         'tipo_evento': 'hand_under_clothes',
@@ -442,7 +449,21 @@ def analyze_video_individual(video_path, mode='operativo', dimension='2D', fps_s
                         'detalles': {'mode': mode, 'razon': 'muñeca intersecta torso'}
                     })
                 
-                if detectar_mirada_excesiva(frame_kps_history):
+                # 2. Detectar manos ocultas detrás (¡Faltaba llamar a esta función!)
+                if detectar_manos_ocultas_o_armas(kps, usar_3d):
+                    detections.append({
+                        'tipo_evento': 'hidden_hands',
+                        'confianza': 0.85,
+                        'frame_inicio': current_idx,
+                        'frame_fin': current_idx,
+                        'segundo_inicio': timestamp_sec,
+                        'segundo_fin': timestamp_sec,
+                        'personas_involucradas': 1,
+                        'detalles': {'mode': mode, 'razon': 'manos detrás de la espalda'}
+                    })
+                
+                # 3. Detectar mirada excesiva
+                if detectar_mirada_excesiva(person_kps_history[pid]):
                     detections.append({
                         'tipo_evento': 'excessive_gaze',
                         'confianza': 0.9,
