@@ -22,8 +22,8 @@ def _generate_stream(source, fps_skip, dimension):
 
     # source puede ser 0 (webcam local) o una URL string
     if isinstance(source, str) and (source.startswith('http') or source.startswith('rtsp')):
-        # Forzar FFmpeg para URLs de red (Windows suele fallar con el backend por defecto)
-        cap = cv2.VideoCapture(source, cv2.CAP_FFMPEG)
+        # Quitar cv2.CAP_FFMPEG forzado porque puede fallar en Windows sin los binarios de FFmpeg
+        cap = cv2.VideoCapture(source)
     else:
         cap = cv2.VideoCapture(source)
 
@@ -103,7 +103,7 @@ def _generate_stream_multiperson(source, fps_skip, dimension, mode):
     processor = LiveActionMultiPersonProcessor(frame_skip=fps_skip, mode=mode, dimension=dimension)
 
     if isinstance(source, str) and (source.startswith('http') or source.startswith('rtsp')):
-        cap = cv2.VideoCapture(source, cv2.CAP_FFMPEG)
+        cap = cv2.VideoCapture(source)
     else:
         cap = cv2.VideoCapture(source)
 

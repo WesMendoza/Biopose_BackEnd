@@ -193,13 +193,35 @@ class LiveActionMultiPersonProcessor:
                 except Exception as e:
                     print(f"Error LSTM Predict in LiveProcessor: {e}")
                     
-            # Visualizar bounding box o indicador en vivo
-            if self.mode != 'operativo':
-                pos_x = np.mean([kp[0] for kp in kps]) if kps else 0.5
-                pos_y = np.mean([kp[1] for kp in kps]) if kps else 0.5
-                h, w, _ = frame.shape
-                # Dibujar ID
-                cv2.putText(output_frame, f"ID: {pid}", (int(pos_x * w), int(pos_y * h)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+            # Visualizar bounding box de la persona basado en su estado de comportamiento
+            h, w, _ = frame.shape
+            if kps:
+                valid_kps = [kp for kp in kps if kp[3] > 0.1] # Puntos con algo de confianza
+                if valid_kps:
+                    min_x = max(0, int(min([kp[0] for kp in valid_kps]) * w) - 20)
+                    min_y = max(0, int(min([kp[1] for kp in valid_kps]) * h) - 20)
+                    max_x = min(w, int(max([kp[0] for kp in valid_kps]) * w) + 20)
+                    max_y = min(h, int(max([kp[1] for kp in valid_kps]) * h) + 20)
+
+                    # Determinar color según el evento
+                    estado_actual = person_state.get("event_label") or "NEUTRAL"
+                    if estado_actual == "PELEAR":
+                        color = (0, 0, 255) # Rojo en BGR
+                        label_text = f"[{pid}] PELEA"
+                    elif estado_actual == "DISTURBIO":
+                        color = (0, 165, 255) # Naranja en BGR
+                        label_text = f"[{pid}] DISTURBIO"
+                    else:
+                        color = (0, 255, 0) # Verde en BGR
+                        label_text = f"[{pid}] NORMAL"
+                    
+                    # Dibujar Rectángulo del cuerpo
+                    cv2.rectangle(output_frame, (min_x, min_y), (max_x, max_y), color, 2)
+                    
+                    # Dibujar etiqueta de texto sobre el rectángulo
+                    (text_w, text_h), _ = cv2.getTextSize(label_text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+                    cv2.rectangle(output_frame, (min_x, min_y - 20), (min_x + text_w, min_y), color, -1)
+                    cv2.putText(output_frame, label_text, (min_x, min_y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255) if estado_actual == "PELEAR" else (0,0,0), 1)
 
         # Dibujar info general
         cv2.putText(output_frame, f"Personas: {num_people}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
