@@ -91,7 +91,8 @@ CREATE TABLE "rolOption" (
   "usuarioCreacion" VARCHAR(50),
   "fechaCreacion" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   "usuarioModificacion" VARCHAR(50),
-  "fechaModificacion" TIMESTAMP
+  "fechaModificacion" TIMESTAMP,
+  "descripcion" VARCHAR(255)
 );
 
 CREATE TABLE "parametrosCabecera" (
@@ -129,6 +130,7 @@ CREATE TABLE IF NOT EXISTS "analysisImageUpload" (
   "nombreOriginal" VARCHAR(255) NOT NULL,
   "rutaArchivoOriginal" VARCHAR(500) NOT NULL,
   "rutaArchivoProcesado" VARCHAR(500) NULL,
+  "rutaArchivoJson" VARCHAR(500) NULL,
   "tamanioBytes" BIGINT NOT NULL CHECK ("tamanioBytes" >= 0),
   estado VARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (estado IN ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED')),
   "fechaCarga" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

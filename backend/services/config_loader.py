@@ -3,10 +3,9 @@ Configuración centralizada de parámetros del sistema.
 """
 
 import os
-from dotenv import load_dotenv
-
-# Cargar variables de entorno
-load_dotenv()
+# La carga de variables de entorno (load_dotenv) ahora se gestiona de 
+# forma centralizada e inteligente (.env.local vs .env) en core/settings.py.
+# Por tanto, no debemos llamar a load_dotenv() aquí para evitar sobreescribir.
 
 class SystemConfig:
     """Clase que centraliza la configuración del sistema."""
