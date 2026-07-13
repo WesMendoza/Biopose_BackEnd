@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 import os
 from pathlib import Path
+import sys
 from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -21,8 +22,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 env_local_path = BASE_DIR / '.env.local'
 if env_local_path.exists():
     load_dotenv(dotenv_path=env_local_path)
+    if 'runserver' in sys.argv and os.environ.get('RUN_MAIN') == 'true':
+        print("[INFO] Cargando variables de entorno desde: .env.local (DESARROLLO LOCAL)")
 else:
     load_dotenv(dotenv_path=BASE_DIR / '.env')
+    if 'runserver' in sys.argv and os.environ.get('RUN_MAIN') == 'true':
+        print("[INFO] Cargando variables de entorno desde: .env (DESPLIEGUE / FALLBACK)")
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
@@ -122,6 +128,10 @@ DATABASES = {
         }
     }
 }
+
+if 'runserver' in sys.argv and os.environ.get('RUN_MAIN') == 'true':
+    print(f"[BD] Conectado a base de datos en: {DATABASES['default']['HOST']}:{DATABASES['default']['PORT']} (DB: {DATABASES['default']['NAME']})")
+
 
 
 # Password validation
