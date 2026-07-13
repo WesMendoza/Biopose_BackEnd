@@ -122,6 +122,12 @@ class VideoUploadView(APIView):
             estado="PENDING"
         )
         
+        # Disparar limpieza pasiva
+        try:
+            from apps.analysis.tasks import cleanup_orphaned_media_task
+            cleanup_orphaned_media_task.delay()
+        except: pass
+        
         response_data = VideoUploadSerializer(video_upload).data
         return Response(response_data, status=status.HTTP_201_CREATED)
     

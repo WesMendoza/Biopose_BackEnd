@@ -260,6 +260,39 @@ class SaveBatchImagesToDiskView(APIView):
             return Response({"error": "Error al generar el ZIP por lotes", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+class ImageCleanupView(APIView):
+    """
+    API para destruir la Imagen Original, Procesada, el JSON y limpiar la BD.
+    Se ejecuta cuando el Frontend abandona la pantalla o cambia de imagen sin descargar.
+    """
+    def delete(self, request, image_id):
+        try:
+            image = ImageUpload.objects.get(pk=image_id)
+            
+            # Borrar Original
+            if image.rutaArchivoOriginal:
+                orig_path = os.path.join(settings.MEDIA_ROOT, str(image.rutaArchivoOriginal))
+                if os.path.exists(orig_path): os.remove(orig_path)
+                
+            # Borrar Procesado
+            if image.rutaArchivoProcesado:
+                proc_path = os.path.join(settings.MEDIA_ROOT, str(image.rutaArchivoProcesado))
+                if os.path.exists(proc_path): os.remove(proc_path)
+                
+            # Borrar JSON
+            if image.rutaArchivoJson:
+                json_path = os.path.join(settings.MEDIA_ROOT, str(image.rutaArchivoJson))
+                if os.path.exists(json_path): os.remove(json_path)
+                
+            image.delete()
+            return Response({"message": "Imagen destruida correctamente"}, status=200)
+            
+        except ImageUpload.DoesNotExist:
+            return Response({"message": "Registro ya no existe, limpieza forzada"}, status=200)
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+
+
 class ListLocalFilesView(APIView):
     # ... (Manten tu código original)
     def post(self, request, *args, **kwargs):

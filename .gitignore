@@ -9,7 +9,11 @@ __pycache__/
 #.vscode/
 *.vscode/
 
-# Videos
+# Media and uploads
+media/
+media/images/
+media/reports/
+media/videos/
 static/videos/uploads/
 static/videos/results/
 

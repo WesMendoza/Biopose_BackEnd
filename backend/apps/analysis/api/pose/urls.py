@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import GetLocalFileDataView, ListLocalFilesView, PoseDetectionImageView, SaveBatchImagesToDiskView, SavePoseToDiskView
+from .views import GetLocalFileDataView, ListLocalFilesView, PoseDetectionImageView, SaveBatchImagesToDiskView, SavePoseToDiskView, ImageCleanupView
 
 urlpatterns = [
     # API: /api/analysis/pose/image/ (Carga y procesamiento directo)
@@ -7,6 +7,9 @@ urlpatterns = [
     
     # API: /api/analysis/pose/image/<int:image_id>/process/ (Procesar imagen existente en BD)
     path('image/<int:image_id>/process/', PoseDetectionImageView.as_view(), name='pose-detect-image-process'),
+    
+    # API: /api/analysis/pose/image/<int:image_id>/ (ELIMINAR)
+    path('image/<int:image_id>/', ImageCleanupView.as_view(), name='pose-detect-image-delete'),
     
     # API: /api/analysis/pose/image/<int:image_id>/save-to-disk/
     path('image/<int:image_id>/save-to-disk/', SavePoseToDiskView.as_view(), name='pose-save-disk'), # <--- SIN LA BARRA AL INICIO

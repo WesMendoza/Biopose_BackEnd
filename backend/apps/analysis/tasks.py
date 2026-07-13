@@ -86,3 +86,59 @@ def process_video_task(self, video_id, mode='operativo', dimension='2D', fps_ski
             video_upload.save(update_fields=['estado'])
         except: pass
         return {'status': 'FAILED', 'error': str(e)}
+
+@shared_task
+def cleanup_orphaned_media_task():
+    """
+    Escanea la base de datos buscando archivos multimedia (VideoUpload e ImageUpload)
+    que tengan más de 1 hora de antigüedad y los elimina físicamente del disco
+    junto con sus reportes JSON asociados y el registro en la BD, para evitar acumulación.
+    """
+    from datetime import timedelta
+    from .models import VideoUpload, ImageUpload
+    import os
+    
+    time_threshold = timezone.now() - timedelta(hours=1)
+    
+    # Limpiar Videos
+    old_videos = VideoUpload.objects.filter(fechaCreacion__lt=time_threshold)
+    for video in old_videos:
+        try:
+            if video.rutaArchivo:
+                video_path = os.path.join(settings.MEDIA_ROOT, str(video.rutaArchivo))
+                if os.path.exists(video_path): os.remove(video_path)
+            
+            if video.rutaVideoProcesado:
+                proc_path = os.path.join(settings.MEDIA_ROOT, str(video.rutaVideoProcesado))
+                if os.path.exists(proc_path): os.remove(proc_path)
+            
+            # Borrar JSON asociado
+            json_filename = f'keypoints_video_{video.idVideoUpload}.json'
+            json_path = os.path.join(settings.MEDIA_ROOT, 'reports', json_filename)
+            if os.path.exists(json_path): os.remove(json_path)
+            
+            video.delete()
+        except Exception as e:
+            print(f"Error limpiando video {video.idVideoUpload}: {e}")
+
+    # Limpiar Imágenes
+    old_images = ImageUpload.objects.filter(fechaCreacion__lt=time_threshold)
+    for image in old_images:
+        try:
+            if image.rutaArchivoOriginal:
+                orig_path = os.path.join(settings.MEDIA_ROOT, str(image.rutaArchivoOriginal))
+                if os.path.exists(orig_path): os.remove(orig_path)
+                
+            if image.rutaArchivoProcesado:
+                proc_path = os.path.join(settings.MEDIA_ROOT, str(image.rutaArchivoProcesado))
+                if os.path.exists(proc_path): os.remove(proc_path)
+                
+            if image.rutaArchivoJson:
+                json_path = os.path.join(settings.MEDIA_ROOT, str(image.rutaArchivoJson))
+                if os.path.exists(json_path): os.remove(json_path)
+                
+            image.delete()
+        except Exception as e:
+            print(f"Error limpiando imagen {image.idImageUpload}: {e}")
+
+    return "Limpieza de huérfanos completada."
