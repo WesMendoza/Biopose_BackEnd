@@ -44,9 +44,12 @@ class LiveProcessor:
         self.mp_drawing = mp.solutions.drawing_utils
         self.mp_face_mesh = mp.solutions.face_mesh
 
+        # 2D = Modelo Ligero (0 o 1), 3D = Modelo Pesado (2) para mejor estimación de profundidad
+        complexity = 2 if dimension == '3D' else 1
+
         self.pose = self.mp_pose.Pose(
             static_image_mode=False,
-            model_complexity=2,
+            model_complexity=complexity,
             min_detection_confidence=0.5,
             min_tracking_confidence=0.5
         )
@@ -80,7 +83,7 @@ class LiveProcessor:
 
         # ---- Umbrales ----
         self.hidden_hands_frame_threshold = max(1, 25 // self.frame_skip)
-        self.hidden_hands_time_threshold = 3.0
+        self.hidden_hands_time_threshold = 1.5  # Reducido para detectar más rápido las manos en la espalda
         self.gaze_angle_threshold = 0.3
         self.gaze_changes_threshold = 8
         self.gaze_time_window = 5.0
@@ -103,45 +106,37 @@ class LiveProcessor:
     # Detectores individuales (migrados de BehaviorDetector.py)
     # =================================================================
 
-    def detect_hand_pockets(self, pose_landmarks, hand_landmarks, frame_shape):
-        """Detecta manos ocultas detrás del cuerpo."""
+    def detect_hand_pockets(self, pose_landmarks, multi_hands):
+        """Detecta manos ocultas detrás del cuerpo o fuera de vista."""
         if not pose_landmarks:
             return False
-        h, w, _ = frame_shape
-        left_hip = pose_landmarks.landmark[self.mp_pose.PoseLandmark.LEFT_HIP]
-        right_hip = pose_landmarks.landmark[self.mp_pose.PoseLandmark.RIGHT_HIP]
-        left_wrist = pose_landmarks.landmark[self.mp_pose.PoseLandmark.LEFT_WRIST]
-        right_wrist = pose_landmarks.landmark[self.mp_pose.PoseLandmark.RIGHT_WRIST]
-        left_shoulder = pose_landmarks.landmark[self.mp_pose.PoseLandmark.LEFT_SHOULDER]
-        right_shoulder = pose_landmarks.landmark[self.mp_pose.PoseLandmark.RIGHT_SHOULDER]
-
-        shoulder_mid_x = (left_shoulder.x + right_shoulder.x) / 2
-        visible_hands = set()
-        if hand_landmarks:
-            for hand_lm in hand_landmarks:
-                hand_x = sum(lm.x for lm in hand_lm.landmark) / len(hand_lm.landmark)
-                if hand_x < shoulder_mid_x:
-                    visible_hands.add('left')
-                else:
-                    visible_hands.add('right')
-
-        hands_in_pockets = False
-        if 'left' not in visible_hands:
-            dist = math.sqrt((left_hip.x - left_wrist.x) ** 2 + (left_hip.y - left_wrist.y) ** 2)
-            behind = left_wrist.z > left_hip.z + 0.1
-            if dist < 0.15 or behind:
-                hands_in_pockets = True
-
-        if 'right' not in visible_hands:
-            dist = math.sqrt((right_hip.x - right_wrist.x) ** 2 + (right_hip.y - right_wrist.y) ** 2)
-            behind = right_wrist.z > right_hip.z + 0.1
-            if dist < 0.15 or behind:
-                hands_in_pockets = True
-
-        return hands_in_pockets
+            
+        # Si MediaPipe Hands logró detectar claramente las manos (puntos amarillos),
+        # significa que están a la vista de la cámara.
+        visible_hands_count = len(multi_hands) if multi_hands else 0
+        if visible_hands_count >= 2:
+            return False # Ambas manos están visibles, no están ocultas
+            
+        l_wrist = pose_landmarks.landmark[self.mp_pose.PoseLandmark.LEFT_WRIST]
+        r_wrist = pose_landmarks.landmark[self.mp_pose.PoseLandmark.RIGHT_WRIST]
+        l_hip = pose_landmarks.landmark[self.mp_pose.PoseLandmark.LEFT_HIP]
+        r_hip = pose_landmarks.landmark[self.mp_pose.PoseLandmark.RIGHT_HIP]
+        
+        # Opción 1: Las muñecas no son visibles (ocultas)
+        if l_wrist.visibility < 0.2 and r_wrist.visibility < 0.2:
+            return True
+            
+        # Opción 2: Muñecas detrás del cuerpo (Z mayor al de la cadera)
+        if (l_wrist.z > l_hip.z + 0.05) or (r_wrist.z > r_hip.z + 0.05):
+            return True
+            
+        # Opción 3 eliminada: Acercar las muñecas al centro del torso en 2D ahora pertenece a la lógica
+        # de "Mano bajo la ropa". Para manos ocultas en la espalda exigimos que Z > Cadera o que no se vean.
+            
+        return False
 
     def detect_hand_under_clothes(self, pose_landmarks):
-        """Detecta mano introducida bajo la ropa (ángulo del brazo + proximidad a cadera)."""
+        """Detecta mano introducida bajo la ropa (ángulo del brazo + proximidad a cadera/pecho)."""
         if not pose_landmarks:
             return False
 
@@ -151,6 +146,7 @@ class LiveProcessor:
         right_shoulder = pose_landmarks.landmark[self.mp_pose.PoseLandmark.RIGHT_SHOULDER]
         right_elbow = pose_landmarks.landmark[self.mp_pose.PoseLandmark.RIGHT_ELBOW]
         right_wrist = pose_landmarks.landmark[self.mp_pose.PoseLandmark.RIGHT_WRIST]
+
         left_hip = pose_landmarks.landmark[self.mp_pose.PoseLandmark.LEFT_HIP]
         right_hip = pose_landmarks.landmark[self.mp_pose.PoseLandmark.RIGHT_HIP]
 
@@ -163,19 +159,28 @@ class LiveProcessor:
                 return 0
             return np.degrees(np.arccos(np.clip(dot / norms, -1.0, 1.0)))
 
-        def near_pocket(wrist, hip, threshold=0.25):
-            return math.sqrt((wrist.x - hip.x) ** 2 + (wrist.y - hip.y) ** 2) < threshold
+        def near_torso(wrist, shoulder, hip, threshold=0.35):
+            # Cerca del pecho, estómago o cadera
+            center_x = (shoulder.x + hip.x) / 2
+            center_y = (shoulder.y + hip.y) / 2
+            dist_to_center = math.sqrt((wrist.x - center_x) ** 2 + (wrist.y - center_y) ** 2)
+            dist_to_shoulder = math.sqrt((wrist.x - shoulder.x) ** 2 + (wrist.y - shoulder.y) ** 2)
+            return dist_to_center < threshold or dist_to_shoulder < threshold
 
         left_angle = calc_angle(left_shoulder, left_elbow, left_wrist)
         right_angle = calc_angle(right_shoulder, right_elbow, right_wrist)
 
-        suspicious_left = (self.arm_angle_threshold_min <= left_angle <= self.arm_angle_threshold_max) and near_pocket(left_wrist, left_hip)
-        suspicious_right = (self.arm_angle_threshold_min <= right_angle <= self.arm_angle_threshold_max) and near_pocket(right_wrist, right_hip)
+        # Validamos que la mano esté bajo el hombro y NO esté detrás del cuerpo (para no solaparse con manos en la espalda)
+        is_front_left = left_wrist.z <= left_hip.z + 0.05
+        is_front_right = right_wrist.z <= right_hip.z + 0.05
+
+        suspicious_left = (20 <= left_angle <= 160) and near_torso(left_wrist, left_shoulder, left_hip) and (left_wrist.y > left_shoulder.y) and is_front_left
+        suspicious_right = (20 <= right_angle <= 160) and near_torso(right_wrist, right_shoulder, right_hip) and (right_wrist.y > right_shoulder.y) and is_front_right
 
         return suspicious_left or suspicious_right
 
     def detect_excessive_gaze(self, face_landmarks, pose_landmarks, frame_shape, current_time):
-        """Detecta giros bruscos y excesivos de la cabeza/mirada."""
+        """Detecta giros bruscos y excesivos de la cabeza/mirada, y miradas fijas prolongadas."""
         if not face_landmarks and not pose_landmarks:
             return False
 
@@ -226,6 +231,22 @@ class LiveProcessor:
         dot = np.clip(np.dot(gaze_vector, prev_gaze), -1.0, 1.0)
         angle_change = np.arccos(dot)
 
+        # Lógica 1: Mirada Fija (Staring)
+        # Solo lo consideramos sospechoso si está mirando fijamente a la cámara por tiempo prolongado.
+        # Ya no usamos is_fixed_gaze (estar quieto en cualquier dirección) porque generaba alertas instantáneas.
+        is_staring_at_camera = mag < 0.1 # Nose y ojos casi alineados frontalmente
+
+        if is_staring_at_camera:
+            if 'staring_frames' not in self.person_data:
+                self.person_data['staring_frames'] = 0
+            self.person_data['staring_frames'] += self.frame_skip
+            staring_duration = self.person_data['staring_frames'] / self.fps_estimate
+            if staring_duration > 2.5: # 2.5 segundos mirando fijamente a la cámara
+                return True
+        else:
+            self.person_data['staring_frames'] = 0
+
+        # Lógica 2: Giros Bruscos
         if angle_change > self.gaze_angle_threshold:
             self.person_data['gaze_change_counter'] += 1
             self.person_data['last_significant_gaze_time'] = current_time
@@ -250,7 +271,7 @@ class LiveProcessor:
     # Procesamiento principal de un frame
     # =================================================================
 
-    def process_frame(self, frame):
+    def process_frame(self, frame, overlay_only=False):
         """
         Procesa un frame BGR de OpenCV.
         Retorna: (output_frame_bgr, behaviors_list, num_people)
@@ -258,7 +279,11 @@ class LiveProcessor:
         self.frame_counter += 1
         process_this = (self.frame_skip == 0) or (self.frame_counter % self.frame_skip == 0)
 
-        output_frame = frame.copy()
+        if overlay_only:
+            output_frame = np.zeros_like(frame)
+        else:
+            output_frame = frame.copy()
+            
         behaviors_detected = []
 
         if not process_this:
@@ -287,7 +312,7 @@ class LiveProcessor:
 
             # --- 1. Manos ocultas ---
             multi_hands = hand_results.multi_hand_landmarks if hand_results.multi_hand_landmarks else []
-            hands_hidden = self.detect_hand_pockets(pose_results.pose_landmarks, multi_hands, frame.shape)
+            hands_hidden = self.detect_hand_pockets(pose_results.pose_landmarks, multi_hands)
 
             if hands_hidden:
                 self.person_data['hidden_hands_frames'] += self.frame_skip
@@ -349,18 +374,35 @@ class LiveProcessor:
                 for b in behaviors_detected:
                     self.realtime_unique_behaviors.add(b)
 
-            # --- Dibujar esqueleto ---
+            # --- Dibujar esqueleto (Estilos amigables) ---
+            # Estilos personalizados para la postura (Puntos blancos, conexiones cian)
+            pose_landmark_style = self.mp_drawing.DrawingSpec(color=(255, 255, 255), thickness=2, circle_radius=3)
+            pose_connection_style = self.mp_drawing.DrawingSpec(color=(255, 200, 0), thickness=2) # Cian en BGR
+            
             self.mp_drawing.draw_landmarks(
-                output_frame, pose_results.pose_landmarks, self.mp_pose.POSE_CONNECTIONS)
+                output_frame, 
+                pose_results.pose_landmarks, 
+                self.mp_pose.POSE_CONNECTIONS,
+                landmark_drawing_spec=pose_landmark_style,
+                connection_drawing_spec=pose_connection_style
+            )
 
+            # Estilos para las manos (Puntos amarillos, conexiones naranjas)
+            hand_landmark_style = self.mp_drawing.DrawingSpec(color=(0, 255, 255), thickness=2, circle_radius=3)
+            hand_connection_style = self.mp_drawing.DrawingSpec(color=(0, 165, 255), thickness=2)
+            
             if hand_results.multi_hand_landmarks:
                 for hand_lm in hand_results.multi_hand_landmarks:
-                    self.mp_drawing.draw_landmarks(output_frame, hand_lm, self.mp_hands.HAND_CONNECTIONS)
+                    self.mp_drawing.draw_landmarks(
+                        output_frame, 
+                        hand_lm, 
+                        self.mp_hands.HAND_CONNECTIONS,
+                        landmark_drawing_spec=hand_landmark_style,
+                        connection_drawing_spec=hand_connection_style
+                    )
 
-            if face_results.multi_face_landmarks:
-                for face_lm in face_results.multi_face_landmarks:
-                    conns = list(mp.solutions.face_mesh.FACEMESH_CONTOURS)
-                    self.mp_drawing.draw_landmarks(output_frame, face_lm, conns, landmark_drawing_spec=None)
+            # NOTA: Omitimos dibujar la malla facial (FaceMesh) porque satura la imagen
+            # de líneas blancas y resulta confuso, aunque la IA la sigue usando internamente.
 
         cv2.putText(output_frame, f"Personas: {num_people}", (10, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)

@@ -160,6 +160,8 @@ class SaveVideoToDiskView(APIView):
         
         # Recibimos el JSON modificado por el usuario desde React
         results_payload = request.data.get('results') 
+        target_w = request.data.get('width')
+        target_h = request.data.get('height')
 
         if not results_payload:
             return Response({"error": "Faltan los resultados (results)."}, status=status.HTTP_400_BAD_REQUEST)
@@ -196,8 +198,15 @@ class SaveVideoToDiskView(APIView):
                     success, frame = cap.read()
                     
                     if success:
+                        # Redimensionar el fotograma si el frontend lo solicita (optimiza RAM, peso y velocidad del ZIP)
+                        if target_w and target_h:
+                            try:
+                                frame = cv2.resize(frame, (int(target_w), int(target_h)))
+                            except Exception as e:
+                                pass # Si falla el redimensionamiento, usamos el original
+
                         # ¡MAGIA! Convertimos la imagen de OpenCV a bytes en memoria sin tocar el disco
-                        ret, buffer = cv2.imencode('.jpg', frame)
+                        ret, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
                         if ret:
                             # Escribimos los bytes directamente dentro de la carpeta "Imagen/" del ZIP
                             dest_name = f"Imagen/00001_frame_{idx+1:03d}.jpg"
