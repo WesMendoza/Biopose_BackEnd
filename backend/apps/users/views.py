@@ -152,12 +152,12 @@ class UsersViewSet(viewsets.ModelViewSet):
         [PUT/PATCH] /users/actualizarPorCedula/{cedula}/
         Actualiza los datos de un usuario buscándolo y validándolo a través de su cédula.
         """
-        # 1. Validamos que exista un usuario activo con esa cédula
-        user = Users.objects.filter(cedula=cedula, estado='A').first()
+        # 1. Validamos que exista un usuario con esa cédula
+        user = Users.objects.filter(cedula=cedula).first()
         if not user:
             return Response({
                 "codigo": status.HTTP_404_NOT_FOUND,
-                "mensaje": "El usuario con la cédula proporcionada no existe o está inactivo.",
+                "mensaje": "El usuario con la cédula proporcionada no existe.",
                 "detalle": None
             }, status=status.HTTP_404_NOT_FOUND)
 
@@ -168,6 +168,12 @@ class UsersViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(user, data=request.data, partial=partial)
         if serializer.is_valid():
             self.perform_update(serializer)
+            
+            # Si se está reactivando al usuario, también reactivamos su acceso a la empresa
+            if request.data.get('estado') == 'A':
+                from apps.gestionEmpresas.models import EmpresaUsuarioRol
+                EmpresaUsuarioRol.objects.filter(idUsuario=user).update(estado='A')
+
             return Response({
                 "codigo": status.HTTP_200_OK,
                 "mensaje": "Usuario actualizado exitosamente",

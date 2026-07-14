@@ -24,25 +24,34 @@ class AuthViewSet(viewsets.ViewSet):
             password = serializer.validated_data['password']
             hashed_pass = hash_password(password)
 
-            try:
-                user = Users.objects.get(correo=correo, password=hashed_pass, estado='A')
-                user.ultimoIngreso = datetime.now()
+            user = Users.objects.filter(correo=correo).first()
 
-                token = generate_jwt(user)
-                return Response({
-                    "codigo": 200,
-                    "mensaje": "Inicio de sesión exitoso",
-                    "detalle": {
-                        "token": token,
-                        # "user": UsersSerializer(user).data
-                    }
-                }, status=status.HTTP_200_OK)
-            except Users.DoesNotExist:
+            if not user or user.password != hashed_pass:
                 return Response({
                     "codigo": 401,
                     "mensaje": "No autorizado",
-                    "detalle": "Credenciales inválidas o usuario inactivo"
+                    "detalle": "Credenciales inválidas"
                 }, status=status.HTTP_401_UNAUTHORIZED)
+            
+            if user.estado != 'A':
+                return Response({
+                    "codigo": 403,
+                    "mensaje": "Cuenta inactiva",
+                    "detalle": "Tu cuenta se encuentra inactiva. Contacta al administrador."
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            user.ultimoIngreso = datetime.now()
+            user.save(update_fields=['ultimoIngreso'])
+
+            token = generate_jwt(user)
+            return Response({
+                "codigo": 200,
+                "mensaje": "Inicio de sesión exitoso",
+                "detalle": {
+                    "token": token,
+                    # "user": UsersSerializer(user).data
+                }
+            }, status=status.HTTP_200_OK)
             
         return Response({
             "codigo": 400,
