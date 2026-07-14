@@ -198,10 +198,10 @@ class LiveActionMultiPersonProcessor:
             if kps:
                 valid_kps = [kp for kp in kps if kp[3] > 0.1] # Puntos con algo de confianza
                 if valid_kps:
-                    min_x = max(0, int(min([kp[0] for kp in valid_kps]) * w) - 20)
-                    min_y = max(0, int(min([kp[1] for kp in valid_kps]) * h) - 20)
-                    max_x = min(w, int(max([kp[0] for kp in valid_kps]) * w) + 20)
-                    max_y = min(h, int(max([kp[1] for kp in valid_kps]) * h) + 20)
+                    min_x = max(0, int(min([kp[0] for kp in valid_kps])) - 20)
+                    min_y = max(0, int(min([kp[1] for kp in valid_kps])) - 20)
+                    max_x = min(w, int(max([kp[0] for kp in valid_kps])) + 20)
+                    max_y = min(h, int(max([kp[1] for kp in valid_kps])) + 20)
 
                     # Determinar color según el evento
                     estado_actual = person_state.get("event_label") or "NEUTRAL"
@@ -237,7 +237,7 @@ class LiveActionMultiPersonProcessor:
         for kp in keypoints:
             x, y, z, conf, name = kp
             if conf > 0.5:
-                cv2.circle(frame, (int(x * w), int(y * h)), 3, (0, 255, 255), -1)
+                cv2.circle(frame, (int(x), int(y)), 3, (0, 255, 255), -1)
 
     def frame_to_base64(self, frame):
         """Codifica un frame BGR a base64 JPEG."""

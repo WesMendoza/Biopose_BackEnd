@@ -87,6 +87,7 @@ class AuthViewSet(viewsets.ViewSet):
 
         # 2. Validaciones previas de la nueva empresa
         from apps.gestionEmpresas.models import Empresa, Rol, EmpresaUsuarioRol
+        from apps.menuOpciones.models import MenuOption, RolOption
         if is_crear_empresa:
             if not nombre_empresa or not ruc_empresa:
                 return Response({"codigo": 400, "mensaje": "Faltan datos", "detalle": "Nombre y RUC de la empresa son obligatorios."}, status=status.HTTP_400_BAD_REQUEST)
@@ -113,13 +114,39 @@ class AuthViewSet(viewsets.ViewSet):
 
                 # Creamos los roles base de esa nueva empresa
                 rol_admin = Rol.objects.create(idEmpresa=empresa, nombreRol='Administrador', estado='A', usuarioCreacion='RegistroWeb', usuarioModificacion='RegistroWeb')
-                Rol.objects.create(idEmpresa=empresa, nombreRol='Invitado', estado='A', usuarioCreacion='RegistroWeb', usuarioModificacion='RegistroWeb')
+                rol_invitado = Rol.objects.create(idEmpresa=empresa, nombreRol='Invitado', estado='A', usuarioCreacion='RegistroWeb', usuarioModificacion='RegistroWeb')
 
                 # Lo asignamos como Admin
                 EmpresaUsuarioRol.objects.create(
                     idEmpresa=empresa, idUsuario=user, idRol=rol_admin, estado='A',
                     usuarioCreacion='RegistroWeb', usuarioModificacion='RegistroWeb'
                 )
+
+                # ASIGNAR TODAS LAS OPCIONES DE MENÚ AL ROL ADMINISTRADOR
+                todas_opciones = MenuOption.objects.filter(estado='A')
+                for opcion in todas_opciones:
+                    RolOption.objects.create(
+                        idEmpresa=empresa,
+                        idRol=rol_admin,
+                        idOption=opcion,
+                        estado='A',
+                        usuarioCreacion='RegistroWeb',
+                        usuarioModificacion='RegistroWeb'
+                    )
+
+                # ASIGNAR OPCIONES LIMITADAS AL ROL INVITADO (Excluir gestión)
+                rutas_excluidas_invitado = ['/app/users', '/app/gestion-empresas', '/app/gestion-roles']
+                for opcion in todas_opciones:
+                    if opcion.ruta not in rutas_excluidas_invitado:
+                        RolOption.objects.create(
+                            idEmpresa=empresa,
+                            idRol=rol_invitado,
+                            idOption=opcion,
+                            estado='A',
+                            usuarioCreacion='RegistroWeb',
+                            usuarioModificacion='RegistroWeb'
+                        )
+
             elif codigo_empresa:
                 # OPCIÓN B: Se une a una empresa existente como INVITADO
                 empresa = Empresa.objects.get(codigoEmpresa=codigo_empresa, estado='A')

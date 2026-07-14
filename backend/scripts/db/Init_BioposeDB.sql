@@ -1,5 +1,6 @@
 -- ==========================================
--- SCRIPT: BIOPOSE DB 
+-- SCRIPT UNIFICADO: BIOPOSE DB (Estructura y Datos Base)
+-- Este script reemplaza a los antiguos scripts separados de create/, data/ y update/
 -- ==========================================
 
 -- 1. CREACIÓN DE ESQUEMA
@@ -9,7 +10,7 @@ SET search_path TO "Dev";
 -- ==========================================
 -- 2. CREACIÓN DE TABLAS MAESTRAS (Sin dependencias)
 -- ==========================================
-CREATE TABLE empresa (
+CREATE TABLE IF NOT EXISTS empresa (
   "idEmpresa" SERIAL PRIMARY KEY,
   "codigoEmpresa" VARCHAR(50),
   "nombreEmpresa" VARCHAR(150),
@@ -22,7 +23,7 @@ CREATE TABLE empresa (
   "fechaModificacion" TIMESTAMP
 );
 
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   "idUsuario" SERIAL PRIMARY KEY,
   nombre VARCHAR(100),
   apellido VARCHAR(100),
@@ -37,7 +38,7 @@ CREATE TABLE users (
   "ultimoIngreso" TIMESTAMP
 );
 
-CREATE TABLE rol (
+CREATE TABLE IF NOT EXISTS rol (
   "idRol" SERIAL PRIMARY KEY,
   "idEmpresa" INT REFERENCES empresa("idEmpresa") ON DELETE CASCADE,
   "nombreRol" VARCHAR(100),
@@ -48,7 +49,7 @@ CREATE TABLE rol (
   "fechaModificacion" TIMESTAMP
 );
 
-CREATE TABLE "menuOption" (
+CREATE TABLE IF NOT EXISTS "menuOption" (
   "idOption" SERIAL PRIMARY KEY,
   "nombreOption" VARCHAR(100),
   ruta VARCHAR(255),
@@ -59,7 +60,7 @@ CREATE TABLE "menuOption" (
   "fechaModificacion" TIMESTAMP
 );
 
-CREATE TABLE "systemParameter" (
+CREATE TABLE IF NOT EXISTS "systemParameter" (
   "idParameter" SERIAL PRIMARY KEY,
   codigo VARCHAR(100) NOT NULL UNIQUE,
   valor VARCHAR(500) NOT NULL,
@@ -70,7 +71,7 @@ CREATE TABLE "systemParameter" (
 -- ==========================================
 -- 3. TABLAS TRANSACCIONALES
 -- ==========================================
-CREATE TABLE "empresaUsuarioRol" (
+CREATE TABLE IF NOT EXISTS "empresaUsuarioRol" (
   "idEmpresaUsuarioRol" SERIAL PRIMARY KEY,
   "idEmpresa" INT REFERENCES empresa("idEmpresa") ON DELETE CASCADE,
   "idUsuario" INT REFERENCES users("idUsuario") ON DELETE CASCADE,
@@ -82,7 +83,7 @@ CREATE TABLE "empresaUsuarioRol" (
   "fechaModificacion" TIMESTAMP
 );
 
-CREATE TABLE "rolOption" (
+CREATE TABLE IF NOT EXISTS "rolOption" (
   "idRolOption" SERIAL PRIMARY KEY,
   "idEmpresa" INT REFERENCES empresa("idEmpresa") ON DELETE CASCADE,
   "idRol" INT REFERENCES rol("idRol") ON DELETE CASCADE,
@@ -91,10 +92,11 @@ CREATE TABLE "rolOption" (
   "usuarioCreacion" VARCHAR(50),
   "fechaCreacion" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   "usuarioModificacion" VARCHAR(50),
-  "fechaModificacion" TIMESTAMP
+  "fechaModificacion" TIMESTAMP,
+  descripcion VARCHAR(255)
 );
 
-CREATE TABLE "parametrosCabecera" (
+CREATE TABLE IF NOT EXISTS "parametrosCabecera" (
   "idParametrosCabecera" SERIAL PRIMARY KEY,
   "idEmpresa" INT REFERENCES empresa("idEmpresa") ON DELETE CASCADE,
   "nombreParametro" VARCHAR(100),
@@ -106,9 +108,9 @@ CREATE TABLE "parametrosCabecera" (
   "fechaModificacion" TIMESTAMP
 );
 
-CREATE TABLE "parametroDetalle" (
+CREATE TABLE IF NOT EXISTS "parametroDetalle" (
   "idParametroDetalle" SERIAL PRIMARY KEY,
-  "codigoParametro" VARCHAR(50) REFERENCES "parametrosCabecera"("codigoParametro") ON DELETE CASCADE, -- ¡CORREGIDO!
+  "codigoParametro" VARCHAR(50) REFERENCES "parametrosCabecera"("codigoParametro") ON DELETE CASCADE,
   "nombreDetalle" VARCHAR(100),
   descripcion VARCHAR(255),
   valor VARCHAR(255),
@@ -129,6 +131,7 @@ CREATE TABLE IF NOT EXISTS "analysisImageUpload" (
   "nombreOriginal" VARCHAR(255) NOT NULL,
   "rutaArchivoOriginal" VARCHAR(500) NOT NULL,
   "rutaArchivoProcesado" VARCHAR(500) NULL,
+  "rutaArchivoJson" VARCHAR(500) NULL,
   "tamanioBytes" BIGINT NOT NULL CHECK ("tamanioBytes" >= 0),
   estado VARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (estado IN ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED')),
   "fechaCarga" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -230,3 +233,89 @@ CREATE TRIGGER trg_set_actualizadoen_analysisReport
 BEFORE UPDATE ON "analysisReport"
 FOR EACH ROW
 EXECUTE FUNCTION fn_set_actualizadoen_analysisReport();
+
+-- ==========================================
+-- 6. DATA INICIAL (Empresa, Roles y Opciones)
+-- ==========================================
+DO $$ 
+DECLARE
+    v_id_empresa INT;
+BEGIN
+    -- 6.1. Empresa Base
+    IF NOT EXISTS (SELECT 1 FROM "Dev".empresa WHERE "nombreEmpresa" = 'BIOPOSE') THEN
+        INSERT INTO "Dev".empresa
+        ("nombreEmpresa", "estado", "usuarioCreacion", "fechaCreacion", "usuarioModificacion", "fechaModificacion")
+        VALUES('BIOPOSE', 'A', 'Script', now(), 'admin', now()) RETURNING "idEmpresa" INTO v_id_empresa;
+        RAISE NOTICE 'Empresa BIOPOSE insertada correctamente con ID %.', v_id_empresa;
+    ELSE 
+        SELECT "idEmpresa" INTO v_id_empresa FROM "Dev".empresa WHERE "nombreEmpresa" = 'BIOPOSE';
+        RAISE NOTICE 'La empresa BIOPOSE ya existe (ID %).', v_id_empresa;
+    END IF;
+
+    -- 6.2. Roles asociados a la Empresa Base
+    IF NOT EXISTS (SELECT 1 FROM "Dev".rol WHERE "nombreRol" = 'Administrador' AND "idEmpresa" = v_id_empresa) THEN
+        INSERT INTO "Dev".rol
+        ("nombreRol", "estado", "usuarioCreacion", "fechaCreacion", "usuarioModificacion", "fechaModificacion", "idEmpresa")
+        VALUES('Administrador', 'A', 'Script', now(), 'admin', now(), v_id_empresa);
+        RAISE NOTICE 'Rol Administrador para BIOPOSE insertado correctamente.';
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM "Dev".rol WHERE "nombreRol" = 'Invitado' AND "idEmpresa" = v_id_empresa) THEN
+        INSERT INTO "Dev".rol
+        ("nombreRol", "estado", "usuarioCreacion", "fechaCreacion", "usuarioModificacion", "fechaModificacion", "idEmpresa")
+        VALUES('Invitado', 'A', 'Script', now(), 'admin', now(), v_id_empresa);
+        RAISE NOTICE 'Rol Invitado para BIOPOSE insertado correctamente.';
+    END IF;
+
+    -- 6.3. Opciones de menú reales del portal
+    IF NOT EXISTS (SELECT 1 FROM "Dev"."menuOption" WHERE "nombreOption" = 'Dashboard' AND ruta = '/app/dashboard') THEN
+        INSERT INTO "Dev"."menuOption" ("nombreOption", "ruta", "estado", "usuarioCreacion") 
+        VALUES
+        ('Dashboard', '/app/dashboard', 'A', 'Sistema'),
+        ('Gestión de Usuarios', '/app/users', 'A', 'Sistema'),
+        ('Gestión de Empresas', '/app/gestion-empresas', 'A', 'Sistema'),
+        ('Gestión de Roles', '/app/gestion-roles', 'A', 'Sistema'),
+        ('Configuración de rutas', '/app/pose/routes', 'A', 'Sistema'),
+        ('Detección en imagen', '/app/pose/image', 'A', 'Sistema'),
+        ('Detección en video', '/app/pose/video', 'A', 'Sistema'),
+        ('Verifica tus imágenes', '/app/pose/verify', 'A', 'Sistema'),
+        ('Video (Individual)', '/app/events/individual/video', 'A', 'Sistema'),
+        ('En vivo (Individual)', '/app/events/individual/live', 'A', 'Sistema'),
+        ('Video (Multipersona)', '/app/events/multi/video', 'A', 'Sistema'),
+        ('En vivo (Multipersona)', '/app/events/multi/live', 'A', 'Sistema');
+        RAISE NOTICE 'Opciones de menú del portal insertadas correctamente.';
+    END IF;
+
+    -- 6.4. Asignar todas las rutas al rol Administrador de BIOPOSE
+    DECLARE
+        v_id_rol_admin INT;
+        v_id_rol_invitado INT;
+    BEGIN
+        SELECT "idRol" INTO v_id_rol_admin FROM "Dev".rol WHERE "nombreRol" = 'Administrador' AND "idEmpresa" = v_id_empresa LIMIT 1;
+        SELECT "idRol" INTO v_id_rol_invitado FROM "Dev".rol WHERE "nombreRol" = 'Invitado' AND "idEmpresa" = v_id_empresa LIMIT 1;
+        
+        IF v_id_rol_admin IS NOT NULL THEN
+            INSERT INTO "Dev"."rolOption" ("idEmpresa", "idRol", "idOption", "estado", "usuarioCreacion")
+            SELECT v_id_empresa, v_id_rol_admin, "idOption", 'A', 'Script'
+            FROM "Dev"."menuOption" mo
+            WHERE NOT EXISTS (
+                SELECT 1 FROM "Dev"."rolOption" ro 
+                WHERE ro."idRol" = v_id_rol_admin AND ro."idOption" = mo."idOption"
+            );
+            RAISE NOTICE 'Permisos totales asignados al Administrador de BIOPOSE.';
+        END IF;
+
+        IF v_id_rol_invitado IS NOT NULL THEN
+            INSERT INTO "Dev"."rolOption" ("idEmpresa", "idRol", "idOption", "estado", "usuarioCreacion")
+            SELECT v_id_empresa, v_id_rol_invitado, "idOption", 'A', 'Script'
+            FROM "Dev"."menuOption" mo
+            WHERE mo.ruta NOT IN ('/app/users', '/app/gestion-empresas', '/app/gestion-roles')
+            AND NOT EXISTS (
+                SELECT 1 FROM "Dev"."rolOption" ro 
+                WHERE ro."idRol" = v_id_rol_invitado AND ro."idOption" = mo."idOption"
+            );
+            RAISE NOTICE 'Permisos limitados asignados al Invitado de BIOPOSE.';
+        END IF;
+    END;
+
+END $$;

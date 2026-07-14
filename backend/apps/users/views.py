@@ -148,10 +148,9 @@ class UsersViewSet(viewsets.ModelViewSet):
         [PUT/PATCH] /users/actualizarPorCedula/{cedula}/
         Actualiza los datos de un usuario buscándolo y validándolo a través de su cédula.
         """
-        try:
-            # 1. Validamos que exista un usuario activo con esa cédula
-            user = Users.objects.get(cedula=cedula, estado='A')
-        except Users.DoesNotExist:
+        # 1. Validamos que exista un usuario activo con esa cédula
+        user = Users.objects.filter(cedula=cedula, estado='A').first()
+        if not user:
             return Response({
                 "codigo": status.HTTP_404_NOT_FOUND,
                 "mensaje": "El usuario con la cédula proporcionada no existe o está inactivo.",
@@ -183,10 +182,9 @@ class UsersViewSet(viewsets.ModelViewSet):
         [DELETE] /users/eliminar/{cedula}/
         Realiza un borrado lógico del usuario buscando por su cédula, cambiando su estado a inactivo ('N').
         """
-        try:
-            # Validamos que exista y esté activo
-            user = Users.objects.get(cedula=cedula, estado='A')
-        except Users.DoesNotExist:
+        # Validamos que exista y esté activo
+        user = Users.objects.filter(cedula=cedula, estado='A').first()
+        if not user:
             return Response({
                 "codigo": status.HTTP_404_NOT_FOUND,
                 "mensaje": "El usuario con la cédula proporcionada no existe o ya se encuentra inactivo.",
