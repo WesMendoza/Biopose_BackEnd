@@ -289,11 +289,7 @@ class LiveActionMultiPersonProcessor:
         for kp in keypoints:
             x, y, z, conf, name = kp
             if conf > 0.5:
-<<<<<<< HEAD
-                cv2.circle(frame, (int(x), int(y)), 3, (0, 255, 255), -1)
-=======
                 cv2.circle(frame, (int(x * scale_x), int(y * scale_y)), 3, (0, 255, 255), -1)
->>>>>>> ef0d37b6b1c6ca81384eebc67f21a5d5d3902688
 
     def frame_to_base64(self, frame):
         """Codifica un frame BGR a base64 JPEG."""
