@@ -108,3 +108,11 @@ Todos los endpoints (excepto login) requieren enviar el token JWT en las cabecer
 Para optimizar rendimiento computacional, el backend **NO** devuelve un video MP4 pesado con los esqueletos dibujados. 
 En su lugar, el backend entrega el archivo de video original sin procesar (`rutaArchivo`) y un archivo ligero (`rutaJsonKeypoints`). 
 El frontend debe colocar un `<canvas>` sobre el video original, escuchar el evento `timeupdate` de HTML5 y pintar las líneas anatómicas (keypoints) extrayéndolas del JSON sincronizado.
+
+---
+
+## ⚡ Pruebas de Rendimiento en Vivo (Locust)
+
+Hemos integrado un entorno de pruebas de estrés para medir el rendimiento de la API REST y el procesamiento asíncrono en Celery.
+
+Para ver las instrucciones de configuración, credenciales y cómo ejecutar el dashboard en tiempo real, consulta la [Guía de Pruebas de Rendimiento](BIOPOSE/Biopose_BackEnd/backend/performance_tests/README.md).
