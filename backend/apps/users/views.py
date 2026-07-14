@@ -12,7 +12,7 @@ class UsersViewSet(viewsets.ModelViewSet):
     """
     Controlador (ViewSet) para operaciones CRUD sobre Users
     """
-    queryset = Users.objects.filter(estado='A')  # Solo listar usuarios activos por defecto
+    queryset = Users.objects.all()  # Modificado para listar todos (activos e inactivos)
     serializer_class = UsersSerializer
     permission_classes = [IsAuthenticated]
 
@@ -39,7 +39,7 @@ class UsersViewSet(viewsets.ModelViewSet):
 
         if empresa_id or rol_id:
             from apps.gestionEmpresas.models import EmpresaUsuarioRol
-            filtros = {'estado': 'A'}
+            filtros = {} # Ya no filtramos por estado='A' para poder ver inactivos
             if empresa_id:
                 filtros['idEmpresa'] = empresa_id
             if rol_id:
@@ -49,9 +49,7 @@ class UsersViewSet(viewsets.ModelViewSet):
             usuarios_validos = EmpresaUsuarioRol.objects.filter(**filtros).values_list('idUsuario', flat=True)
             queryset = queryset.filter(idUsuario__in=usuarios_validos)
 
-            # Filtramos el join explícitamente para solo traer la relación activa de esta empresa
-            # Esto evita que usuarios con roles reasignados (inactivos) aparezcan duplicados
-            queryset = queryset.filter(empresausuariorol__estado='A')
+            # Filtramos el join explícitamente para esta empresa
             if empresa_id:
                 queryset = queryset.filter(empresausuariorol__idEmpresa=empresa_id)
 
