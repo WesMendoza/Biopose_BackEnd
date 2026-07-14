@@ -49,11 +49,17 @@ class UsersViewSet(viewsets.ModelViewSet):
             usuarios_validos = EmpresaUsuarioRol.objects.filter(**filtros).values_list('idUsuario', flat=True)
             queryset = queryset.filter(idUsuario__in=usuarios_validos)
 
+            # Filtramos el join explícitamente para solo traer la relación activa de esta empresa
+            # Esto evita que usuarios con roles reasignados (inactivos) aparezcan duplicados
+            queryset = queryset.filter(empresausuariorol__estado='A')
+            if empresa_id:
+                queryset = queryset.filter(empresausuariorol__idEmpresa=empresa_id)
+
             # MAGIA PARA EL FRONTEND: Anotamos el idRol y el nombreRol para que React no tenga que cruzarlos
             if empresa_id:
                 queryset = queryset.annotate(
                     idRol_anotado=F('empresausuariorol__idRol'),
-                    nombreRol_anotado=F('empresausuariorol__idRol__nombreRol') # Asumiendo que tu Foreign Key se llama idRol y apunta al modelo Rol que tiene 'nombreRol'
+                    nombreRol_anotado=F('empresausuariorol__idRol__nombreRol') 
                 )
 
         return queryset.distinct()

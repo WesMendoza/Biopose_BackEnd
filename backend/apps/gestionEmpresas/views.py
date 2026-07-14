@@ -679,26 +679,15 @@ class EmpresaUsuarioRolViewSet(BaseStandardViewSet):
                 "detalle": {"idEmpresaUsuarioRol": asignacion.idEmpresaUsuarioRol}
             }, status=status.HTTP_200_OK)
 
-        asignacion.estado = 'I'
+        asignacion.idRol_id = id_rol
         asignacion.usuarioModificacion = str(getattr(request.user, 'idUsuario', 'Sistema'))
-        asignacion.save()
-
-        user_identifier = str(getattr(request.user, 'idUsuario', 'Sistema'))
-        nueva = EmpresaUsuarioRol.objects.create(
-            idEmpresa=asignacion.idEmpresa,
-            idUsuario=asignacion.idUsuario,
-            idRol_id=id_rol,
-            estado='A',
-            usuarioCreacion=user_identifier,
-            usuarioModificacion=user_identifier
-        )
-
-        serializer = self.get_serializer(nueva)
+        asignacion.save(update_fields=['idRol_id', 'usuarioModificacion'])
+        
         return Response({
-            "codigo": status.HTTP_201_CREATED,
+            "codigo": status.HTTP_200_OK,
             "mensaje": "Rol reasignado correctamente.",
-            "detalle": serializer.data
-        }, status=status.HTTP_201_CREATED)
+            "detalle": {"idEmpresaUsuarioRol": asignacion.idEmpresaUsuarioRol}
+        }, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=['put'], url_path='eliminar')
     def eliminar_por_usuario(self, request):
