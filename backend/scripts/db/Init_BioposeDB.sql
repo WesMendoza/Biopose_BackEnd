@@ -279,7 +279,7 @@ BEGIN
         ('Gestión de Usuarios', '/app/users', 'A', 'Sistema'),
         ('Gestión de Empresas', '/app/gestion-empresas', 'A', 'Sistema'),
         ('Gestión de Roles', '/app/gestion-roles', 'A', 'Sistema'),
-        ('Configuración de rutas', '/app/pose/routes', 'A', 'Sistema'),
+        ('Configuración de FPS', '/app/pose/routes', 'A', 'Sistema'),
         ('Detección en imagen', '/app/pose/image', 'A', 'Sistema'),
         ('Detección en video', '/app/pose/video', 'A', 'Sistema'),
         ('Verifica tus imágenes', '/app/pose/verify', 'A', 'Sistema'),
