@@ -244,12 +244,6 @@ class LiveActionMultiPersonProcessor:
             if kps:
                 valid_kps = [kp for kp in kps if kp[3] > 0.1] # Puntos con algo de confianza
                 if valid_kps:
-<<<<<<< HEAD
-                    min_x = max(0, int(min([kp[0] for kp in valid_kps])) - 20)
-                    min_y = max(0, int(min([kp[1] for kp in valid_kps])) - 20)
-                    max_x = min(w, int(max([kp[0] for kp in valid_kps])) + 20)
-                    max_y = min(h, int(max([kp[1] for kp in valid_kps])) + 20)
-=======
                     # Escalar las coordenadas del modelo (640x640) al tamaño original del frame
                     scale_x = w / 640.0
                     scale_y = h / 640.0
@@ -258,7 +252,6 @@ class LiveActionMultiPersonProcessor:
                     min_y = max(0, int(min([kp[1] for kp in valid_kps]) * scale_y) - 20)
                     max_x = min(w, int(max([kp[0] for kp in valid_kps]) * scale_x) + 20)
                     max_y = min(h, int(max([kp[1] for kp in valid_kps]) * scale_y) + 20)
->>>>>>> ef0d37b6b1c6ca81384eebc67f21a5d5d3902688
 
                     # Determinar color según el evento
                     estado_actual = person_state.get("event_label") or "NEUTRAL"
