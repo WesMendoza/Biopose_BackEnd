@@ -87,7 +87,7 @@ class AuthViewSet(viewsets.ViewSet):
 
         # 2. Validaciones previas de la nueva empresa
         from apps.gestionEmpresas.models import Empresa, Rol, EmpresaUsuarioRol
-        from apps.menuOpciones.models import MenuOption, RolOption
+        from apps.menuOpciones.models import MenuOpcion, RolOption
         if is_crear_empresa:
             if not nombre_empresa or not ruc_empresa:
                 return Response({"codigo": 400, "mensaje": "Faltan datos", "detalle": "Nombre y RUC de la empresa son obligatorios."}, status=status.HTTP_400_BAD_REQUEST)
@@ -123,7 +123,7 @@ class AuthViewSet(viewsets.ViewSet):
                 )
 
                 # ASIGNAR TODAS LAS OPCIONES DE MENÚ AL ROL ADMINISTRADOR
-                todas_opciones = MenuOption.objects.filter(estado='A')
+                todas_opciones = MenuOpcion.objects.filter(estado='A')
                 for opcion in todas_opciones:
                     RolOption.objects.create(
                         idEmpresa=empresa,
