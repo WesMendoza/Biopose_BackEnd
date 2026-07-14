@@ -26,10 +26,10 @@ class LiveActionMultiPersonProcessor:
         # Parámetros para la máquina de estados LSTM
         self.WINDOW_SIZE = get_behavior_service().window_size
         self.EVAL_WINDOW = 15
-        self.MIN_P = 5
-        self.MIN_D = 5
-        self.END_W = 10
-        self.ESCAPE_D = 10
+        self.MIN_P = 3
+        self.MIN_D = 3
+        self.END_W = 5
+        self.ESCAPE_D = 5
 
         # Estado acumulado
         self.buffers = {}
@@ -77,6 +77,36 @@ class LiveActionMultiPersonProcessor:
             raw_pose = get_pose_service().detect_pose_with_tracking(frame_resized, persist=True)
             tracked_persons = raw_pose.get('tracked_persons', [])
             
+            # --- Reparación de Tracker (Tracker Repair) ---
+            # En modo 2D (YOLOv8), el rastreador (ByteTrack) suele perder el ID de la persona cuando hay saltos de frames 
+            # rápidos o movimientos bruscos. Si el ID cambia, el buffer LSTM se vacía y se pierde la acción (como un golpe).
+            # Para evitar esto, reasignamos los buffers de los IDs perdidos a los IDs nuevos si sus narices están cerca.
+            current_noses = {p['person_id']: p['keypoints'][0] for p in tracked_persons if len(p['keypoints']) > 0}
+            new_pids = [pid for pid in current_noses.keys() if pid not in self.buffers]
+            missing_pids = [pid for pid in self.buffers.keys() if pid not in current_noses.keys()]
+            
+            if new_pids and missing_pids:
+                for new_pid in new_pids:
+                    new_nose = current_noses[new_pid]
+                    best_old_pid = None
+                    min_dist = 200.0  # Tolerancia máxima de 200 píxeles
+                    
+                    for old_pid in missing_pids:
+                        if len(self.buffers[old_pid]) > 0:
+                            old_nose = self.buffers[old_pid][-1][0] # kp[0] es la nariz en el buffer
+                            dist = ((new_nose[0] - old_nose[0])**2 + (new_nose[1] - old_nose[1])**2)**0.5
+                            if dist < min_dist:
+                                min_dist = dist
+                                best_old_pid = old_pid
+                    
+                    if best_old_pid is not None:
+                        # Transferir la memoria LSTM (buffer) al nuevo ID para no interrumpir el análisis
+                        self.buffers[new_pid] = self.buffers.pop(best_old_pid)
+                        if best_old_pid in self.states_history:
+                            self.states_history[new_pid] = self.states_history.pop(best_old_pid)
+                        missing_pids.remove(best_old_pid)
+            # ----------------------------------------------
+            
             for p_data in tracked_persons:
                 pid = p_data['person_id']
                 coords = p_data['keypoints']
@@ -116,7 +146,21 @@ class LiveActionMultiPersonProcessor:
             if pid not in self.buffers:
                 self.buffers[pid] = deque(maxlen=self.WINDOW_SIZE)
             
-            self.buffers[pid].append([[kp[0], kp[1]] for kp in kps])
+            current_kps = [[kp[0], kp[1]] for kp in kps]
+            
+            # Aplicar suavizado temporal (EMA) para reducir el 'jitter' de YOLOv8 en modo 2D.
+            # Esto ayuda enormemente a la red LSTM a calcular velocidades limpias.
+            if len(self.buffers[pid]) > 0 and not self.usar_3d:
+                prev_kps = self.buffers[pid][-1]
+                alpha = 0.85  # 0.85 suaviza el ruido micrométrico pero mantiene la velocidad de los puños
+                smoothed_kps = []
+                for i in range(len(current_kps)):
+                    sx = alpha * current_kps[i][0] + (1 - alpha) * prev_kps[i][0]
+                    sy = alpha * current_kps[i][1] + (1 - alpha) * prev_kps[i][1]
+                    smoothed_kps.append([sx, sy])
+                self.buffers[pid].append(smoothed_kps)
+            else:
+                self.buffers[pid].append(current_kps)
 
             # Si tenemos suficientes frames en el buffer, predecir
             if len(self.buffers[pid]) == self.WINDOW_SIZE:
@@ -129,9 +173,11 @@ class LiveActionMultiPersonProcessor:
                     person_state["history"].append((pred_label, prob))
                     historial_reciente = list(person_state["history"])[-self.EVAL_WINDOW:]
 
-                    # En live mode usamos un threshold base moderado, ya que el usuario puede configurarlo desde UI (pero no se pasa aquí)
-                    # Lo definiremos en 0.70 por defecto para que sea responsivo en vivo.
-                    confidence_threshold_live = 0.70
+                    # Ajuste dinámico de sensibilidad: YOLOv8 (2D) genera datos distintos al dataset original
+                    # bajando la confianza de la red. Lo compensamos relajando el umbral exclusivamente para 2D.
+                    confidence_threshold_live = 0.50 if self.usar_3d else 0.35
+                    min_frames = self.MIN_P if self.usar_3d else 2
+                    
                     pelear_frames = sum(1 for lbl, p in historial_reciente if lbl == "PELEAR" and p >= confidence_threshold_live)
                     disturbio_frames = sum(1 for lbl, p in historial_reciente if lbl == "DISTURBIO" and p >= confidence_threshold_live)
                     calma_frames = len(historial_reciente) - pelear_frames - disturbio_frames
@@ -139,8 +185,8 @@ class LiveActionMultiPersonProcessor:
                     sustained_action = person_state.get("event_label") or "NEUTRAL"
 
                     if sustained_action == "NEUTRAL":
-                        if pelear_frames >= self.MIN_P: sustained_action = "PELEAR"
-                        elif disturbio_frames >= self.MIN_D: sustained_action = "DISTURBIO"
+                        if pelear_frames >= min_frames: sustained_action = "PELEAR"
+                        elif disturbio_frames >= min_frames: sustained_action = "DISTURBIO"
                     elif sustained_action == "PELEAR":
                         if calma_frames >= self.END_W: sustained_action = "NEUTRAL"
                         elif disturbio_frames >= self.MIN_D: sustained_action = "DISTURBIO"
@@ -198,10 +244,21 @@ class LiveActionMultiPersonProcessor:
             if kps:
                 valid_kps = [kp for kp in kps if kp[3] > 0.1] # Puntos con algo de confianza
                 if valid_kps:
+<<<<<<< HEAD
                     min_x = max(0, int(min([kp[0] for kp in valid_kps])) - 20)
                     min_y = max(0, int(min([kp[1] for kp in valid_kps])) - 20)
                     max_x = min(w, int(max([kp[0] for kp in valid_kps])) + 20)
                     max_y = min(h, int(max([kp[1] for kp in valid_kps])) + 20)
+=======
+                    # Escalar las coordenadas del modelo (640x640) al tamaño original del frame
+                    scale_x = w / 640.0
+                    scale_y = h / 640.0
+                    
+                    min_x = max(0, int(min([kp[0] for kp in valid_kps]) * scale_x) - 20)
+                    min_y = max(0, int(min([kp[1] for kp in valid_kps]) * scale_y) - 20)
+                    max_x = min(w, int(max([kp[0] for kp in valid_kps]) * scale_x) + 20)
+                    max_y = min(h, int(max([kp[1] for kp in valid_kps]) * scale_y) + 20)
+>>>>>>> ef0d37b6b1c6ca81384eebc67f21a5d5d3902688
 
                     # Determinar color según el evento
                     estado_actual = person_state.get("event_label") or "NEUTRAL"
@@ -234,10 +291,16 @@ class LiveActionMultiPersonProcessor:
     def _draw_skeleton(self, frame, keypoints, shape):
         """Dibuja el esqueleto simple sobre el frame para visualización"""
         h, w, _ = shape
+        scale_x = w / 640.0
+        scale_y = h / 640.0
         for kp in keypoints:
             x, y, z, conf, name = kp
             if conf > 0.5:
+<<<<<<< HEAD
                 cv2.circle(frame, (int(x), int(y)), 3, (0, 255, 255), -1)
+=======
+                cv2.circle(frame, (int(x * scale_x), int(y * scale_y)), 3, (0, 255, 255), -1)
+>>>>>>> ef0d37b6b1c6ca81384eebc67f21a5d5d3902688
 
     def frame_to_base64(self, frame):
         """Codifica un frame BGR a base64 JPEG."""

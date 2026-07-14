@@ -17,8 +17,12 @@ from dotenv import load_dotenv
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Cargar variables de entorno desde archivo .env
-load_dotenv(os.path.join(BASE_DIR, '.env'))
+# Cargar variables de entorno desde archivo .env.local o .env (fallback)
+env_local_path = BASE_DIR / '.env.local'
+if env_local_path.exists():
+    load_dotenv(dotenv_path=env_local_path)
+else:
+    load_dotenv(dotenv_path=BASE_DIR / '.env')
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
@@ -42,6 +46,7 @@ ALLOWED_HOSTS = [
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',

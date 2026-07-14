@@ -93,7 +93,11 @@ CREATE TABLE IF NOT EXISTS "rolOption" (
   "fechaCreacion" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   "usuarioModificacion" VARCHAR(50),
   "fechaModificacion" TIMESTAMP,
+<<<<<<< HEAD:backend/scripts/db/Init_BioposeDB.sql
   descripcion VARCHAR(255)
+=======
+  "descripcion" VARCHAR(255)
+>>>>>>> ef0d37b6b1c6ca81384eebc67f21a5d5d3902688:backend/scripts/db/create/CreateDb.sql
 );
 
 CREATE TABLE IF NOT EXISTS "parametrosCabecera" (

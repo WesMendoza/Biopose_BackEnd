@@ -163,6 +163,7 @@ def analyze_video_multipersona(video_path, mode='operativo', dimension='2D', fps
     bg_subtractor = cv2.createBackgroundSubtractorMOG2(history=50, varThreshold=25, detectShadows=False)
 
     sampled_frames = []
+    person_keypoints = []
     
     fps_skip = 1 if mode in ['analitico', 'debug'] else max(1, int(fps_skip))
     usar_3d = (dimension == '3D')

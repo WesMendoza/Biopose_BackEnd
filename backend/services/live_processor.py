@@ -83,7 +83,7 @@ class LiveProcessor:
 
         # ---- Umbrales ----
         self.hidden_hands_frame_threshold = max(1, 25 // self.frame_skip)
-        self.hidden_hands_time_threshold = 3.0
+        self.hidden_hands_time_threshold = 1.5  # Reducido para detectar más rápido las manos en la espalda
         self.gaze_angle_threshold = 0.3
         self.gaze_changes_threshold = 8
         self.gaze_time_window = 5.0
@@ -130,19 +130,8 @@ class LiveProcessor:
         if (l_wrist.z > l_hip.z + 0.05) or (r_wrist.z > r_hip.z + 0.05):
             return True
             
-        # Opción 3: Muñecas muy cerca de las caderas o en el centro (bolsillos o cruzadas)
-        mid_hip_x = (l_hip.x + r_hip.x) / 2
-        mid_hip_y = (l_hip.y + r_hip.y) / 2
-        
-        l_dist = math.sqrt((l_wrist.x - l_hip.x)**2 + (l_wrist.y - l_hip.y)**2)
-        r_dist = math.sqrt((r_wrist.x - r_hip.x)**2 + (r_wrist.y - r_hip.y)**2)
-        center_l_dist = math.sqrt((l_wrist.x - mid_hip_x)**2 + (l_wrist.y - mid_hip_y)**2)
-        center_r_dist = math.sqrt((r_wrist.x - mid_hip_x)**2 + (r_wrist.y - mid_hip_y)**2)
-        
-        # Solo aplicamos distancias si las muñecas tienen algo de visibilidad
-        if l_wrist.visibility > 0.3 or r_wrist.visibility > 0.3:
-            if l_dist < 0.25 or r_dist < 0.25 or center_l_dist < 0.2 or center_r_dist < 0.2:
-                return True
+        # Opción 3 eliminada: Acercar las muñecas al centro del torso en 2D ahora pertenece a la lógica
+        # de "Mano bajo la ropa". Para manos ocultas en la espalda exigimos que Z > Cadera o que no se vean.
             
         return False
 
@@ -181,9 +170,12 @@ class LiveProcessor:
         left_angle = calc_angle(left_shoulder, left_elbow, left_wrist)
         right_angle = calc_angle(right_shoulder, right_elbow, right_wrist)
 
-        # Hacemos los umbrales más flexibles (ángulo entre 20 y 160)
-        suspicious_left = (20 <= left_angle <= 160) and near_torso(left_wrist, left_shoulder, left_hip)
-        suspicious_right = (20 <= right_angle <= 160) and near_torso(right_wrist, right_shoulder, right_hip)
+        # Validamos que la mano esté bajo el hombro y NO esté detrás del cuerpo (para no solaparse con manos en la espalda)
+        is_front_left = left_wrist.z <= left_hip.z + 0.05
+        is_front_right = right_wrist.z <= right_hip.z + 0.05
+
+        suspicious_left = (20 <= left_angle <= 160) and near_torso(left_wrist, left_shoulder, left_hip) and (left_wrist.y > left_shoulder.y) and is_front_left
+        suspicious_right = (20 <= right_angle <= 160) and near_torso(right_wrist, right_shoulder, right_hip) and (right_wrist.y > right_shoulder.y) and is_front_right
 
         return suspicious_left or suspicious_right
 
@@ -240,16 +232,16 @@ class LiveProcessor:
         angle_change = np.arccos(dot)
 
         # Lógica 1: Mirada Fija (Staring)
-        # Si el ángulo cambia poco o si el vector de mirada es muy cercano al centro (mirando a la cámara)
+        # Solo lo consideramos sospechoso si está mirando fijamente a la cámara por tiempo prolongado.
+        # Ya no usamos is_fixed_gaze (estar quieto en cualquier dirección) porque generaba alertas instantáneas.
         is_staring_at_camera = mag < 0.1 # Nose y ojos casi alineados frontalmente
-        is_fixed_gaze = angle_change < 0.15 # Permitimos un ligero temblor natural
 
-        if is_fixed_gaze or is_staring_at_camera:
+        if is_staring_at_camera:
             if 'staring_frames' not in self.person_data:
                 self.person_data['staring_frames'] = 0
             self.person_data['staring_frames'] += self.frame_skip
             staring_duration = self.person_data['staring_frames'] / self.fps_estimate
-            if staring_duration > 1.5: # 1.5 segundos mirando fijamente es suficiente para activar
+            if staring_duration > 2.5: # 2.5 segundos mirando fijamente a la cámara
                 return True
         else:
             self.person_data['staring_frames'] = 0
