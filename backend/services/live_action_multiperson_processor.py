@@ -173,10 +173,10 @@ class LiveActionMultiPersonProcessor:
                     person_state["history"].append((pred_label, prob))
                     historial_reciente = list(person_state["history"])[-self.EVAL_WINDOW:]
 
-                    # Ajuste dinámico de sensibilidad: YOLOv8 (2D) genera datos distintos al dataset original
-                    # bajando la confianza de la red. Lo compensamos relajando el umbral exclusivamente para 2D.
-                    confidence_threshold_live = 0.50 if self.usar_3d else 0.35
-                    min_frames = self.MIN_P if self.usar_3d else 2
+                    # Ajuste dinámico de sensibilidad: Relajamos el umbral para 2D y 3D
+                    # para que sea más sensible a movimientos rápidos en tiempo real.
+                    confidence_threshold_live = 0.35
+                    min_frames = 2
                     
                     pelear_frames = sum(1 for lbl, p in historial_reciente if lbl == "PELEAR" and p >= confidence_threshold_live)
                     disturbio_frames = sum(1 for lbl, p in historial_reciente if lbl == "DISTURBIO" and p >= confidence_threshold_live)
