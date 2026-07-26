@@ -12,7 +12,7 @@ class UsersViewSet(viewsets.ModelViewSet):
     """
     Controlador (ViewSet) para operaciones CRUD sobre Users
     """
-    queryset = Users.objects.filter(estado='A')  # Solo listar usuarios activos por defecto
+    queryset = Users.objects.all()  # Modificado para listar todos (activos e inactivos)
     serializer_class = UsersSerializer
     permission_classes = [IsAuthenticated]
 
@@ -39,7 +39,7 @@ class UsersViewSet(viewsets.ModelViewSet):
 
         if empresa_id or rol_id:
             from apps.gestionEmpresas.models import EmpresaUsuarioRol
-            filtros = {'estado': 'A'}
+            filtros = {} # Ya no filtramos por estado='A' para poder ver inactivos
             if empresa_id:
                 filtros['idEmpresa'] = empresa_id
             if rol_id:
@@ -49,11 +49,15 @@ class UsersViewSet(viewsets.ModelViewSet):
             usuarios_validos = EmpresaUsuarioRol.objects.filter(**filtros).values_list('idUsuario', flat=True)
             queryset = queryset.filter(idUsuario__in=usuarios_validos)
 
+            # Filtramos el join explícitamente para esta empresa
+            if empresa_id:
+                queryset = queryset.filter(empresausuariorol__idEmpresa=empresa_id)
+
             # MAGIA PARA EL FRONTEND: Anotamos el idRol y el nombreRol para que React no tenga que cruzarlos
             if empresa_id:
                 queryset = queryset.annotate(
                     idRol_anotado=F('empresausuariorol__idRol'),
-                    nombreRol_anotado=F('empresausuariorol__idRol__nombreRol') # Asumiendo que tu Foreign Key se llama idRol y apunta al modelo Rol que tiene 'nombreRol'
+                    nombreRol_anotado=F('empresausuariorol__idRol__nombreRol') 
                 )
 
         return queryset.distinct()
@@ -148,13 +152,12 @@ class UsersViewSet(viewsets.ModelViewSet):
         [PUT/PATCH] /users/actualizarPorCedula/{cedula}/
         Actualiza los datos de un usuario buscándolo y validándolo a través de su cédula.
         """
-        try:
-            # 1. Validamos que exista un usuario activo con esa cédula
-            user = Users.objects.get(cedula=cedula, estado='A')
-        except Users.DoesNotExist:
+        # 1. Validamos que exista un usuario con esa cédula
+        user = Users.objects.filter(cedula=cedula).first()
+        if not user:
             return Response({
                 "codigo": status.HTTP_404_NOT_FOUND,
-                "mensaje": "El usuario con la cédula proporcionada no existe o está inactivo.",
+                "mensaje": "El usuario con la cédula proporcionada no existe.",
                 "detalle": None
             }, status=status.HTTP_404_NOT_FOUND)
 
@@ -165,6 +168,12 @@ class UsersViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(user, data=request.data, partial=partial)
         if serializer.is_valid():
             self.perform_update(serializer)
+            
+            # Si se está reactivando al usuario, también reactivamos su acceso a la empresa
+            if request.data.get('estado') == 'A':
+                from apps.gestionEmpresas.models import EmpresaUsuarioRol
+                EmpresaUsuarioRol.objects.filter(idUsuario=user).update(estado='A')
+
             return Response({
                 "codigo": status.HTTP_200_OK,
                 "mensaje": "Usuario actualizado exitosamente",
@@ -183,10 +192,9 @@ class UsersViewSet(viewsets.ModelViewSet):
         [DELETE] /users/eliminar/{cedula}/
         Realiza un borrado lógico del usuario buscando por su cédula, cambiando su estado a inactivo ('N').
         """
-        try:
-            # Validamos que exista y esté activo
-            user = Users.objects.get(cedula=cedula, estado='A')
-        except Users.DoesNotExist:
+        # Validamos que exista y esté activo
+        user = Users.objects.filter(cedula=cedula, estado='A').first()
+        if not user:
             return Response({
                 "codigo": status.HTTP_404_NOT_FOUND,
                 "mensaje": "El usuario con la cédula proporcionada no existe o ya se encuentra inactivo.",
