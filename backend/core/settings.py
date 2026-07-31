@@ -209,6 +209,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://16.58.233.154",
     "https://16.58.233.154.nip.io",
     "http://localhost:5173",
+    "http://localhost:4173",
     "https://feature-cambios-jahir-aws.d12tl618ooqvuj.amplifyapp.com",
 ]
 
@@ -220,5 +221,6 @@ CSRF_TRUSTED_ORIGINS = [
     "http://16.58.233.154",
     "https://16.58.233.154.nip.io",
     "http://localhost:5173",
+    "http://localhost:4173",
     "https://feature-cambios-jahir-aws.d12tl618ooqvuj.amplifyapp.com",
 ]
