@@ -24,25 +24,34 @@ class AuthViewSet(viewsets.ViewSet):
             password = serializer.validated_data['password']
             hashed_pass = hash_password(password)
 
-            try:
-                user = Users.objects.get(correo=correo, password=hashed_pass, estado='A')
-                user.ultimoIngreso = datetime.now()
+            user = Users.objects.filter(correo=correo).first()
 
-                token = generate_jwt(user)
-                return Response({
-                    "codigo": 200,
-                    "mensaje": "Inicio de sesión exitoso",
-                    "detalle": {
-                        "token": token,
-                        # "user": UsersSerializer(user).data
-                    }
-                }, status=status.HTTP_200_OK)
-            except Users.DoesNotExist:
+            if not user or user.password != hashed_pass:
                 return Response({
                     "codigo": 401,
                     "mensaje": "No autorizado",
-                    "detalle": "Credenciales inválidas o usuario inactivo"
+                    "detalle": "Credenciales inválidas"
                 }, status=status.HTTP_401_UNAUTHORIZED)
+            
+            if user.estado != 'A':
+                return Response({
+                    "codigo": 403,
+                    "mensaje": "Cuenta inactiva",
+                    "detalle": "Tu cuenta se encuentra inactiva. Contacta al administrador."
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            user.ultimoIngreso = datetime.now()
+            user.save(update_fields=['ultimoIngreso'])
+
+            token = generate_jwt(user)
+            return Response({
+                "codigo": 200,
+                "mensaje": "Inicio de sesión exitoso",
+                "detalle": {
+                    "token": token,
+                    # "user": UsersSerializer(user).data
+                }
+            }, status=status.HTTP_200_OK)
             
         return Response({
             "codigo": 400,
@@ -87,6 +96,7 @@ class AuthViewSet(viewsets.ViewSet):
 
         # 2. Validaciones previas de la nueva empresa
         from apps.gestionEmpresas.models import Empresa, Rol, EmpresaUsuarioRol
+        from apps.menuOpciones.models import MenuOpcion, RolOption
         if is_crear_empresa:
             if not nombre_empresa or not ruc_empresa:
                 return Response({"codigo": 400, "mensaje": "Faltan datos", "detalle": "Nombre y RUC de la empresa son obligatorios."}, status=status.HTTP_400_BAD_REQUEST)
@@ -113,13 +123,39 @@ class AuthViewSet(viewsets.ViewSet):
 
                 # Creamos los roles base de esa nueva empresa
                 rol_admin = Rol.objects.create(idEmpresa=empresa, nombreRol='Administrador', estado='A', usuarioCreacion='RegistroWeb', usuarioModificacion='RegistroWeb')
-                Rol.objects.create(idEmpresa=empresa, nombreRol='Invitado', estado='A', usuarioCreacion='RegistroWeb', usuarioModificacion='RegistroWeb')
+                rol_invitado = Rol.objects.create(idEmpresa=empresa, nombreRol='Invitado', estado='A', usuarioCreacion='RegistroWeb', usuarioModificacion='RegistroWeb')
 
                 # Lo asignamos como Admin
                 EmpresaUsuarioRol.objects.create(
                     idEmpresa=empresa, idUsuario=user, idRol=rol_admin, estado='A',
                     usuarioCreacion='RegistroWeb', usuarioModificacion='RegistroWeb'
                 )
+
+                # ASIGNAR TODAS LAS OPCIONES DE MENÚ AL ROL ADMINISTRADOR
+                todas_opciones = MenuOpcion.objects.filter(estado='A')
+                for opcion in todas_opciones:
+                    RolOption.objects.create(
+                        idEmpresa=empresa,
+                        idRol=rol_admin,
+                        idOption=opcion,
+                        estado='A',
+                        usuarioCreacion='RegistroWeb',
+                        usuarioModificacion='RegistroWeb'
+                    )
+
+                # ASIGNAR OPCIONES LIMITADAS AL ROL INVITADO (Excluir gestión)
+                rutas_excluidas_invitado = ['/app/users', '/app/gestion-empresas', '/app/gestion-roles']
+                for opcion in todas_opciones:
+                    if opcion.ruta not in rutas_excluidas_invitado:
+                        RolOption.objects.create(
+                            idEmpresa=empresa,
+                            idRol=rol_invitado,
+                            idOption=opcion,
+                            estado='A',
+                            usuarioCreacion='RegistroWeb',
+                            usuarioModificacion='RegistroWeb'
+                        )
+
             elif codigo_empresa:
                 # OPCIÓN B: Se une a una empresa existente como INVITADO
                 empresa = Empresa.objects.get(codigoEmpresa=codigo_empresa, estado='A')

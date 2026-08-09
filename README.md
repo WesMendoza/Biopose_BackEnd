@@ -87,7 +87,8 @@ celery -A core worker -l info --pool=solo
 Todos los endpoints (excepto login) requieren enviar el token JWT en las cabeceras: `Authorization: Bearer <tu_token>`.
 
 > [!NOTE]
-> Para una documentación exhaustiva e individualizada de todos los endpoints, Server-Sent Events, WebSockets y tareas asíncronas de este módulo, consulta la [Guía Detallada de Métodos de Análisis](Biopose_BackEnd/Doc/METODOS_ANALISIS.md) o en esta ruta levantando el proyecto [http://127.0.0.1:8000/api/docs/](http://127.0.0.1:8000/api/docs/) o [http://localhost:8000/api/docs/](http://localhost:8000/api/docs/).
+> * Para una documentación exhaustiva e individualizada de todos los endpoints, Server-Sent Events, WebSockets y tareas asíncronas de este módulo, consulta la [Guía Detallada de Métodos de Análisis](Biopose_BackEnd/Doc/METODOS_ANALISIS.md) o en esta ruta levantando el proyecto [http://127.0.0.1:8000/api/docs/](http://127.0.0.1:8000/api/docs/) o [http://localhost:8000/api/docs/](http://localhost:8000/api/docs/).
+> * Para ver los diagramas visuales interactivos de los flujos del sistema (Autenticación, Celery + Redis, Canvas y WebSockets), consulta los [Diagramas de Flujo de BioPose](Doc/DIAGRAMAS_FLUJO.md).
 
 ### A. Autenticación (Multi-tenant)
 - **Login:** `POST /api/auth/login/` (Devuelve token de acceso).
@@ -108,3 +109,11 @@ Todos los endpoints (excepto login) requieren enviar el token JWT en las cabecer
 Para optimizar rendimiento computacional, el backend **NO** devuelve un video MP4 pesado con los esqueletos dibujados. 
 En su lugar, el backend entrega el archivo de video original sin procesar (`rutaArchivo`) y un archivo ligero (`rutaJsonKeypoints`). 
 El frontend debe colocar un `<canvas>` sobre el video original, escuchar el evento `timeupdate` de HTML5 y pintar las líneas anatómicas (keypoints) extrayéndolas del JSON sincronizado.
+
+---
+
+## ⚡ Pruebas de Rendimiento en Vivo (Locust)
+
+Hemos integrado un entorno de pruebas de estrés para medir el rendimiento de la API REST y el procesamiento asíncrono en Celery.
+
+Para ver las instrucciones de configuración, credenciales y cómo ejecutar el dashboard en tiempo real, consulta la [Guía de Pruebas de Rendimiento](BIOPOSE/Biopose_BackEnd/backend/performance_tests/README.md).

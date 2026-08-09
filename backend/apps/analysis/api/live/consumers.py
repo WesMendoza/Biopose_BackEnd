@@ -118,6 +118,9 @@ class LiveActionMultiPersonConsumer(WebsocketConsumer):
             if self.processor is None:
                 self.processor = LiveActionMultiPersonProcessor(frame_skip=1, mode=visual_mode, dimension=dimension)
                 self.processor.fps_estimate = 30.0 / (fps_skip if fps_skip > 0 else 1)
+            else:
+                self.processor.mode = visual_mode
+                self.processor.usar_3d = (dimension == '3D')
 
             img_bytes = base64.b64decode(frame_b64)
             np_arr = np.frombuffer(img_bytes, dtype=np.uint8)
